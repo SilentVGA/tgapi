@@ -10,8 +10,11 @@
 
 仅需一个第三方依赖，无需数据库，开箱即用：
 
+```bash
+apt install python3 python3-pip
 pip install telethon
 python3 main.py
+```
 > 注意：如果是受限的 Debian/Ubuntu 系统，请使用 pip install telethon --break-system-packages
 
 启动后访问 http://你的IP:8000/admin 进入管理面板（默认密码 admin123，请在代码顶部修改）。
