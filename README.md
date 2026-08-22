@@ -1,54 +1,40 @@
 # tgapi - 极简 Telegram 接码系统
 
-一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收网站。[如何使用？](https://github.com/FalseFor/tgapi/edit/main/README.md#-%E5%BF%AB%E9%80%9F%E4%BD%BF%E7%94%A8)
+一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收网站。
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Memory](https://img.shields.io/badge/Memory-✓128MB-orange?logo=linux)
 
-## ✨ 核心特性
+## ⚡ 部署与使用
 
-###  极致轻量 & 懒加载
-- **零框架依赖**：仅依赖 `telethon`，完全使用 Python 内置的 `http.server` 和 `sqlite3` 构建。
-- **内存占用极低**：采用“懒加载”策略。脚本启动时**不连接**任何 Telegram 账号，仅在用户访问特定接码页面时才动态唤醒客户端。128MB 内存的 NAT 机器也能轻松运行。
+仅需一个第三方依赖，无需数据库，开箱即用：
 
-### ️ 智能状态与验证码检测
-- **精准封号检测**：自动向 `@SpamBot` 发送 `/start`，精准识别账号状态（正常 / 掉线 / 死亡封号）。
-- **智能验证码提取**：优化正则匹配逻辑，兼容“验证码已发送至邮箱”等提示文本，仅提取并显示**最新一条**验证码，拒绝历史消息干扰。
-- **2FA 支持**：自动记录并显示账号的 2FA 密码。
-
-
-### 🔒 安全与隔离
-- **UUID 隔离**：每个 Telegram 账号生成独立的 UUID 接码路径，互不干扰。
-- **面板保护**：内置简单的 Cookie 会话验证与密码保护。
-
----
-
-##  环境要求
-
-仅需一个第三方库：
-
-```bash
 pip install telethon
-```
-*(如果是受限的 Debian/Ubuntu 系统，请使用 `pip install telethon --break-system-packages`)*
+python3 main.py
+> 注意：如果是受限的 Debian/Ubuntu 系统，请使用 pip install telethon --break-system-packages
+
+启动后访问 http://你的IP:8000/admin 进入管理面板（默认密码 admin123，请在代码顶部修改）。
 
 ---
 
-## ⚡ 快速使用
-1. 修改 `main.py` 顶部的配置：
-   ```python
-   ADMIN_PASSWORD = "你的面板密码"
-   SERVER_PORT = 8000  # 监听端口
-   ```
+## ✨ 核心功能
 
-2. 运行脚本：
-   ```bash
-   python3 main.py
-   ```
+### 🎯 现代化接码页面
+- UUID 安全隔离：接码链接使用随机 UUID（如 /getcode/a1b2c3d4-...），不在 URL 中暴露手机号，防止遍历攻击。
+- 现代 UI 设计：采用卡片式布局与渐变背景，验证码大字号高亮显示，2FA 密码独立展示，视觉清晰舒适。
+- 纯手动刷新：接码页面无自动轮询，仅在用户点击“Refresh”时获取最新数据，极致节省服务器资源与客户端连接数。
 
-3. 前往`my.telegram.org`登录账号，前往[API获取页面](https://my.telegram.org/apps)获取API ID、API Hash
+### 📂 原生 .session 文件存储
+- 告别 SQLite 数据库：每个账号独立保存为 Telethon 原生 .session 文件 + .meta.json 元数据文件。
+- 格式完全兼容：生成的 .session 文件可直接被 tg-transformer、opentele 及任何标准 Telethon 脚本加载使用。
+- 热插拔管理：支持在后台直接上传外部 .session 文件导入，也支持通过手机号+验证码在线登录生成。
 
-4. 访问管理面板：
-   - 地址：`http://你的IP:端口/admin`
-   - 在面板中添加 Telegram 账号（需填入 Phone、API ID、API Hash）。
+### 🔑 灵活的 API 配置
+- 官方 API 默认：内置 Telegram Desktop 官方 API（api_id=2040），添加账号时无需手动填写即可直接使用。
+- 自定义 API 支持：同时保留 API_ID / API_HASH 输入框，兼容使用私有 API 生成的 session 文件。
+
+### 🛠️ 轻量管理面板
+- 一键操作：每个账号提供 Copy（复制接码链接）、Go（蓝色按钮新标签页打开接码页）、Delete（删除账号）三个快捷按钮。
+- 零框架依赖：完全基于 Python 内置 http.server 构建，无 Flask/FastAPI 等额外开销，128MB 内存机器轻松运行。
+- 懒加载机制：脚本启动时不预连接任何账号，仅当接码页面被访问时才动态唤醒对应客户端，空闲时自动释放连接。
