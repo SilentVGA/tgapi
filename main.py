@@ -5,6 +5,7 @@ import os
 import json
 import shutil
 import threading
+import time
 from html import escape as html_escape
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -29,135 +30,425 @@ clients = {}
 pending_logins = {}
 client_locks = {}
 file_lock = threading.RLock()
+ACCOUNT_STATUS_CACHE = {}
+ACCOUNT_STATUS_TTL = 30
 
-GETCODE_TEMPLATE = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Verification Code</title>
-<style>
-:root {
-    --bg1: #4f7cff;
-    --bg2: #7a5cff;
-    --card: #ffffff;
-    --text: #1e2a3a;
-    --muted: #7c8aa0;
-    --line: #e3e9f2;
-    --code-bg: #f5f8ff;
+BANNED_EXCEPTION_NAMES = {
+    "UserDeactivatedBanError",
+    "UserDeactivatedError",
+    "PhoneNumberBannedError",
+    "AuthKeyUnregisteredError",
+    "SessionRevokedError",
+    "UserBannedInChannelError",
+    "ChannelPrivateError",
+    "AuthKeyDuplicatedError",
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
+
+COMMON_STYLE = """
+:root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #000000;
+    --muted: #555555;
+    --border: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #000000;
+        --fg: #ffffff;
+        --muted: #aaaaaa;
+        --border: #ffffff;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body {
+    margin: 0;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: linear-gradient(135deg, var(--bg1), var(--bg2));
-    padding: 24px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
+
+body.admin {
+    align-items: flex-start;
+    padding: 24px 0;
+}
+
+.container {
+    width: 100%;
+    max-width: 430px;
+    padding: 20px;
+}
+
+.container.wide {
+    max-width: 860px;
+}
+
 .card {
-    width: 400px;
-    max-width: 100%;
-    background: var(--card);
-    border-radius: 24px;
-    box-shadow: 0 24px 64px rgba(20, 30, 90, 0.28);
-    padding: 40px 36px 32px;
-    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    background: var(--bg);
 }
-.badge {
-    display: inline-block;
-    font-size: 12px;
-    letter-spacing: 3px;
+
+h1 {
+    margin: 0 0 18px;
+    font-size: 18px;
+    text-align: center;
+    font-weight: 650;
+    letter-spacing: .02em;
+}
+
+h2 {
+    margin: 24px 0 12px;
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.label {
+    margin: 0 0 6px;
+    font-size: 11px;
+    letter-spacing: .12em;
     text-transform: uppercase;
     color: var(--muted);
-    background: #f1f4f9;
-    border-radius: 999px;
-    padding: 6px 14px;
-    margin-bottom: 24px;
 }
-.code-label {
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 10px;
-}
-.code {
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 52px;
-    font-weight: 700;
-    letter-spacing: 10px;
-    text-indent: 10px;
-    color: var(--text);
-    background: var(--code-bg);
-    border: 1.5px dashed #c8d4f0;
-    border-radius: 16px;
-    padding: 24px 8px;
-    margin-bottom: 26px;
-    user-select: all;
-}
-.code.waiting {
+
+.value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 18px;
-    letter-spacing: 1px;
-    text-indent: 1px;
-    color: #a5b1c6;
-    font-weight: 500;
-}
-.divider {
-    height: 1px;
-    background: var(--line);
-    margin: 0 0 20px;
-}
-.twofa-row {
+    line-height: 1.4;
+    letter-spacing: .04em;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 0 0 18px;
+    text-align: center;
+    word-break: break-all;
+    min-height: 46px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: #f8fafc;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin-bottom: 26px;
+    justify-content: center;
 }
-.twofa-label {
+
+.status {
+    margin: 4px 0 14px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.status.error {
+    font-weight: 700;
+    color: var(--fg);
+}
+
+.status.warn {
+    font-style: italic;
+}
+
+.actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.button,
+button,
+input[type="submit"] {
+    display: inline-block;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 14px;
+    color: var(--fg);
+    text-decoration: none;
+    background: var(--bg);
+    cursor: pointer;
+}
+
+.button:active,
+button:active,
+input[type="submit"]:active {
+    opacity: .7;
+}
+
+.input,
+input[type="text"],
+input[type="password"],
+input[type="file"],
+input[type="number"] {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--fg);
+    margin: 0 0 14px;
+}
+
+form {
+    margin: 0;
+}
+
+.field {
+    margin: 0 0 14px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin: 0 0 12px;
+    word-break: break-all;
+}
+
+.item-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.item-phone {
+    font-weight: 650;
+}
+
+.item-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.item-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.small {
     font-size: 12px;
     color: var(--muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
 }
-.twofa-value {
-    font-family: Consolas, Menlo, monospace;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    user-select: all;
-}
-.refresh {
-    display: inline-block;
+
+.link {
+    color: var(--fg);
     text-decoration: none;
-    color: #ffffff;
-    background: linear-gradient(135deg, var(--bg1), var(--bg2));
-    border-radius: 999px;
-    padding: 12px 36px;
-    font-size: 15px;
-    font-weight: 600;
-    box-shadow: 0 8px 20px rgba(79, 124, 255, 0.35);
+    border-bottom: 1px solid var(--border);
 }
-.refresh:hover { opacity: 0.92; }
-</style>
+
+.inline-form {
+    display: inline;
+}
+"""
+
+GETCODE_TEMPLATE = ("""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telegram Code</title>
+<style>""" + COMMON_STYLE + """</style>
 </head>
 <body>
+<div class="container">
 <div class="card">
-    <div class="badge">Telegram Code</div>
-    <div class="code-label">Verification Code</div>
-    __CODE__
-    <div class="divider"></div>
-    <div class="twofa-row">
-        <span class="twofa-label">2FA Password</span>
-        <span class="twofa-value">__2FA__</span>
-    </div>
-    <a class="refresh" href="/getcode/__ID__">Refresh</a>
+<h1>Telegram Code</h1>
+<div class="label">Verification Code</div>
+<div class="value">__CODE__</div>
+<div class="label">2FA Password</div>
+<div class="value">__2FA__</div>
+<div class="__STATUS_CLASS__">__STATUS__</div>
+<div class="actions">
+<a class="button" href="/getcode/__ID__">Refresh</a>
+</div>
+</div>
 </div>
 </body>
-</html>"""
+</html>
+""")
+
+SIMPLE_TEMPLATE = ("""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>""" + COMMON_STYLE + """</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<h1>__TITLE__</h1>
+__BODY__
+</div>
+</div>
+</body>
+</html>
+""")
+
+ADMIN_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Panel</title>
+<style>__STYLE__</style>
+</head>
+<body class="admin">
+<div class="container wide">
+<div class="card">
+<h1>Admin Panel</h1>
+<h2>Add New Account</h2>
+<form method="post" action="/admin/send_code">
+<div class="row">
+<div>
+<div class="label">Phone</div>
+<input type="text" name="phone" required>
+</div>
+<div>
+<div class="label">API_ID</div>
+<input type="text" name="api_id" placeholder="official client">
+</div>
+</div>
+<div class="label">API_HASH</div>
+<input type="text" name="api_hash" placeholder="official client">
+<div class="actions">
+<button type="submit">Send Code</button>
+</div>
+</form>
+<h2>Import .session File</h2>
+<form method="post" action="/admin/import_session" enctype="multipart/form-data">
+<div class="label">Session file</div>
+<input type="file" name="session_file" required>
+<div class="row">
+<div>
+<div class="label">Phone optional</div>
+<input type="text" name="phone">
+</div>
+<div>
+<div class="label">2FA password optional</div>
+<input type="password" name="password_2fa">
+</div>
+</div>
+<div class="row">
+<div>
+<div class="label">API_ID optional</div>
+<input type="text" name="api_id" placeholder="official client default">
+</div>
+<div>
+<div class="label">API_HASH optional</div>
+<input type="text" name="api_hash" placeholder="official client default">
+</div>
+</div>
+<div class="actions">
+<button type="submit">Import</button>
+</div>
+</form>
+<h2>Accounts (__COUNT__)</h2>
+__ITEMS__
+<div class="actions">
+<a class="button" href="/admin/logout">Logout</a>
+</div>
+</div>
+</div>
+__SCRIPT__
+</body>
+</html>
+"""
+
+COPY_SCRIPT = """<script>
+function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        return;
+    }
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+}
+</script>"""
+
+
+def simple_page(title, body):
+    return SIMPLE_TEMPLATE.replace("__TITLE__", html_escape(title)).replace("__BODY__", body)
+
+
+def message_page(title, message):
+    body = f'''<p>{html_escape(message)}</p><div class="actions"><a class="button" href="/admin">Back</a></div>'''
+    return simple_page(title, body)
+
+
+def get_status_display(status):
+    if status == "ok":
+        return "Account active", "status ok"
+
+    if status == "banned":
+        return "Account frozen / banned", "status error"
+
+    if status == "deleted":
+        return "Account deleted", "status error"
+
+    if status == "flood":
+        return "Rate limited, retry later", "status warn"
+
+    if status == "no_session":
+        return "Session unavailable", "status error"
+
+    if status == "timeout":
+        return "Status check timeout", "status warn"
+
+    return "Status unknown", "status warn"
+
+
+async def check_account_status(account_id, client):
+    now = time.time()
+
+    cached = ACCOUNT_STATUS_CACHE.get(account_id)
+    if cached and now - cached[0] < ACCOUNT_STATUS_TTL:
+        return cached[1]
+
+    status = "unknown"
+
+    try:
+        me = await client.get_me()
+
+        if getattr(me, "deleted", False):
+            status = "deleted"
+        else:
+            status = "ok"
+
+    except Exception as e:
+        name = type(e).__name__
+
+        if name in BANNED_EXCEPTION_NAMES:
+            status = "banned"
+        elif name == "FloodWaitError":
+            status = "flood"
+        else:
+            status = "error"
+
+    ACCOUNT_STATUS_CACHE[account_id] = (now, status)
+    return status
 
 
 def is_safe_account_id(value):
@@ -229,6 +520,7 @@ def load_meta(account_id):
     data.setdefault("api_hash", DEFAULT_API_HASH)
     data.setdefault("password_2fa", "")
     data.setdefault("latest_code", "")
+    data.setdefault("latest_code_ts", 0)
     data["id"] = account_id
 
     return data
@@ -243,13 +535,19 @@ def save_meta(account_id, meta):
         "api_id": meta.get("api_id", DEFAULT_API_ID),
         "api_hash": str(meta.get("api_hash", DEFAULT_API_HASH)),
         "password_2fa": str(meta.get("password_2fa", "")),
-        "latest_code": str(meta.get("latest_code", ""))
+        "latest_code": str(meta.get("latest_code", "")),
+        "latest_code_ts": meta.get("latest_code_ts", 0)
     }
 
     try:
         clean["api_id"] = int(clean["api_id"] or DEFAULT_API_ID)
     except Exception:
         clean["api_id"] = DEFAULT_API_ID
+
+    try:
+        clean["latest_code_ts"] = float(clean["latest_code_ts"] or 0)
+    except Exception:
+        clean["latest_code_ts"] = 0
 
     path = meta_path(account_id)
 
@@ -313,7 +611,8 @@ def migrate_legacy_sessions():
                 "api_id": DEFAULT_API_ID,
                 "api_hash": DEFAULT_API_HASH,
                 "password_2fa": "",
-                "latest_code": ""
+                "latest_code": "",
+                "latest_code_ts": 0
             })
 
         remove_session_files(session_base(account_id))
@@ -345,7 +644,8 @@ def list_accounts():
                 "api_id": DEFAULT_API_ID,
                 "api_hash": DEFAULT_API_HASH,
                 "password_2fa": "",
-                "latest_code": ""
+                "latest_code": "",
+                "latest_code_ts": 0
             }
 
             save_meta(account_id, meta)
@@ -384,6 +684,8 @@ def find_account_id_by_phone(phone):
 
 
 def delete_account(account_id):
+    ACCOUNT_STATUS_CACHE.pop(account_id, None)
+
     with file_lock:
         for path in (
             session_path(account_id),
@@ -464,6 +766,11 @@ async def ensure_client(account_id):
 
             clients.pop(account_id, None)
 
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+
         if not os.path.exists(session_path(account_id)):
             return None
 
@@ -489,7 +796,11 @@ async def ensure_client(account_id):
                         match = re.search(r"\b(\d{5,6})\b", text)
 
                         if match:
-                            update_meta(account_id, latest_code=match.group(1))
+                            update_meta(
+                                account_id,
+                                latest_code=match.group(1),
+                                latest_code_ts=time.time()
+                            )
                 except Exception:
                     pass
 
@@ -629,22 +940,18 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/admin/login":
-            html = """
-<html>
-<body>
-<h3>Admin Login</h3>
-<form method="post" action="/admin/auth">
-Password: <input type="password" name="pwd">
-<input type="submit" value="Enter">
-</form>
-</body>
-</html>
-"""
-            self._send_html(200, html)
+            body = '''<form method="post" action="/admin/auth">
+<div class="label">Password</div>
+<input type="password" name="pwd" required>
+<div class="actions">
+<button type="submit">Login</button>
+</div>
+</form>'''
+            self._send_html(200, simple_page("Admin Login", body))
             return
 
         if path.startswith("/getcode/"):
-            account_id = path.split("/")[-1]
+            account_id = path.split("/getcode/", 1)[-1].strip("/")
 
             if not is_safe_account_id(account_id):
                 self._send_html(404, "Not found")
@@ -657,30 +964,45 @@ Password: <input type="password" name="pwd">
                 return
 
             async def prepare_page():
-                await ensure_client(account_id)
+                client = await ensure_client(account_id)
+
+                if client is None:
+                    return "no_session"
+
+                return await check_account_status(account_id, client)
 
             future = asyncio.run_coroutine_threadsafe(prepare_page(), main_loop)
 
             try:
-                future.result(timeout=10)
+                status = future.result(timeout=10)
             except Exception:
-                pass
+                status = "timeout"
 
             meta = load_meta(account_id) or meta
 
             code = str(meta.get("latest_code", ""))
+
+            try:
+                code_ts = float(meta.get("latest_code_ts", 0) or 0)
+            except Exception:
+                code_ts = 0
+
+            if code and time.time() - code_ts <= 1200:
+                code_html = html_escape(code)
+            else:
+                code_html = "Waiting..."
+
             twofa = str(meta.get("password_2fa", "")) or "None"
 
-            if code:
-                code_html = f'<div class="code">{html_escape(code)}</div>'
-            else:
-                code_html = '<div class="code waiting">Waiting for code...</div>'
+            status_text, status_class = get_status_display(status)
 
             html = (
                 GETCODE_TEMPLATE
                 .replace("__CODE__", code_html)
                 .replace("__2FA__", html_escape(twofa))
                 .replace("__ID__", html_escape(account_id, quote=True))
+                .replace("__STATUS__", html_escape(status_text))
+                .replace("__STATUS_CLASS__", status_class)
             )
 
             self._send_html(200, html)
@@ -712,66 +1034,34 @@ Password: <input type="password" name="pwd">
 
                 safe_id = html_escape(account_id, quote=True)
                 safe_phone = html_escape(phone or account_id)
-                safe_code = html_escape(code)
+                safe_code = html_escape(code or "None")
                 safe_copy = html_escape(copy_value, quote=True)
 
-                items += f"""
-<div>
-<input id="copy-{safe_id}" size="80" readonly value="{safe_copy}">
-<button type="button" onclick="copyText('copy-{safe_id}')">Copy</button>
-<button type="button" onclick="window.open('/getcode/{safe_id}', '_blank')" style="color:blue;">Go</button>
-<form method="post" action="/admin/delete/{safe_id}" style="display:inline;">
+                items += f'''
+<div class="item">
+<div class="item-top">
+<div class="item-phone">{safe_phone}</div>
+<div class="item-actions">
+<button type="button" data-copy="{safe_copy}" onclick="copyText(this.dataset.copy)">Copy</button>
+<a class="button" href="/getcode/{safe_id}">Go</a>
+<form class="inline-form" method="post" action="/admin/delete/{safe_id}" onsubmit="return confirm('Delete this account?');">
 <button type="submit">Delete</button>
 </form>
-<br>
-Phone: {safe_phone} | Code: {safe_code}
 </div>
-<br>
-"""
+</div>
+<div class="item-code">Code: {safe_code}</div>
+<div class="small">ID: {safe_id}</div>
+</div>
+'''
 
-            copy_script = """
-<script>
-function copyText(id) {
-    var e = document.getElementById(id);
-    e.select();
-    e.setSelectionRange(0, 99999);
-    document.execCommand("copy");
-}
-</script>
-"""
+            html = (
+                ADMIN_TEMPLATE
+                .replace("__STYLE__", COMMON_STYLE)
+                .replace("__COUNT__", str(len(accounts)))
+                .replace("__ITEMS__", items or "<p>No accounts.</p>")
+                .replace("__SCRIPT__", COPY_SCRIPT)
+            )
 
-            html = f"""
-<html>
-<body>
-{copy_script}
-
-<h2>Admin Panel</h2>
-
-<h3>Add New Account</h3>
-<form method="post" action="/admin/send_code">
-Phone: <input name="phone">
-API_ID: <input name="api_id" value="{OFFICIAL_CLIENT_API_ID}"> (official client)
-API_HASH: <input name="api_hash" value="{OFFICIAL_CLIENT_API_HASH}"> (official client)
-<input type="submit" value="Send Code">
-</form>
-
-<h3>Import .session File</h3>
-<form method="post" action="/admin/import_session" enctype="multipart/form-data">
-Session file: <input type="file" name="session_file" accept=".session"><br>
-Phone (optional): <input name="phone"><br>
-API_ID (optional): <input name="api_id" placeholder="{OFFICIAL_CLIENT_API_ID}"> (official client default)<br>
-API_HASH (optional): <input name="api_hash" placeholder="official"> (official client default)<br>
-2FA password (optional): <input type="password" name="password_2fa"><br>
-<input type="submit" value="Import">
-</form>
-
-<h3>Accounts ({len(accounts)})</h3>
-{items}
-
-<a href="/admin/logout">Logout</a>
-</body>
-</html>
-"""
             self._send_html(200, html)
             return
 
@@ -797,7 +1087,11 @@ API_HASH (optional): <input name="api_hash" placeholder="official"> (official cl
             if pwd == ADMIN_PASSWORD:
                 self._redirect("/admin", "admin_session=valid; Path=/; HttpOnly")
             else:
-                self._send_html(200, "Wrong password. <a href='/admin/login'>Back</a>")
+                page = simple_page(
+                    "Admin Login",
+                    '<p>Wrong password.</p><div class="actions"><a class="button" href="/admin/login">Back</a></div>'
+                )
+                self._send_html(200, page)
 
             return
 
@@ -814,11 +1108,11 @@ API_HASH (optional): <input name="api_hash" placeholder="official"> (official cl
             )
 
             if not phone:
-                self._send_html(200, "Missing phone. <a href='/admin'>Back</a>")
+                self._send_html(200, message_page("Error", "Missing phone."))
                 return
 
             if error:
-                self._send_html(200, f"{html_escape(error)} <a href='/admin'>Back</a>")
+                self._send_html(200, message_page("Error", error))
                 return
 
             async def _send_code():
@@ -847,21 +1141,19 @@ API_HASH (optional): <input name="api_hash" placeholder="official"> (official cl
                         "tmp_base": tmp_base
                     }
 
-                    return f"""
-<html>
-<body>
-<h3>Enter Code for {html_escape(phone)}</h3>
+                    return simple_page("Enter Code", f'''
 <form method="post" action="/admin/verify">
 <input type="hidden" name="phone" value="{html_escape(phone, quote=True)}">
-Code: <input name="code"><br><br>
-2FA Password: <input type="password" name="password"><br><br>
-<input type="submit" value="Login">
+<div class="label">Code</div>
+<input type="text" name="code" required>
+<div class="label">2FA Password</div>
+<input type="password" name="password">
+<div class="actions">
+<button type="submit">Verify</button>
+<a class="button" href="/admin">Back</a>
+</div>
 </form>
-<br>
-<a href="/admin">Back</a>
-</body>
-</html>
-"""
+''')
 
                 except Exception as e:
                     try:
@@ -871,14 +1163,14 @@ Code: <input name="code"><br><br>
 
                     remove_session_files(tmp_base)
 
-                    return f"Error: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Error: {str(e)}")
 
             future = asyncio.run_coroutine_threadsafe(_send_code(), main_loop)
 
             try:
                 html = future.result(timeout=30)
             except Exception as e:
-                html = f"Timeout: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                html = message_page("Error", f"Timeout: {str(e)}")
 
             self._send_html(200, html)
             return
@@ -891,7 +1183,7 @@ Code: <input name="code"><br><br>
             pending = pending_logins.get(phone)
 
             if not pending:
-                self._send_html(200, "Session expired. <a href='/admin'>Back</a>")
+                self._send_html(200, message_page("Error", "Session expired."))
                 return
 
             async def _verify():
@@ -910,7 +1202,7 @@ Code: <input name="code"><br><br>
                         remove_session_files(tmp_base)
                         pending_logins.pop(phone, None)
 
-                        return "2FA password required. <a href='/admin'>Back</a>"
+                        return message_page("Error", "2FA password required.")
 
                     try:
                         await client.sign_in(password=pwd)
@@ -923,7 +1215,7 @@ Code: <input name="code"><br><br>
                         remove_session_files(tmp_base)
                         pending_logins.pop(phone, None)
 
-                        return f"2FA failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                        return message_page("Error", f"2FA failed: {str(e)}")
 
                 except Exception as e:
                     try:
@@ -934,7 +1226,7 @@ Code: <input name="code"><br><br>
                     remove_session_files(tmp_base)
                     pending_logins.pop(phone, None)
 
-                    return f"Code failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Code failed: {str(e)}")
 
                 try:
                     client.session.save()
@@ -950,7 +1242,7 @@ Code: <input name="code"><br><br>
                     remove_session_files(tmp_base)
                     pending_logins.pop(phone, None)
 
-                    return f"Save session failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Save session failed: {str(e)}")
 
                 clean_phone = str(real_phone).replace("+", "").strip()
                 existing_id = find_account_id_by_phone(clean_phone)
@@ -975,7 +1267,7 @@ Code: <input name="code"><br><br>
                     remove_session_files(tmp_base)
                     pending_logins.pop(phone, None)
 
-                    return f"Move session failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Move session failed: {str(e)}")
 
                 remove_session_files(tmp_base)
 
@@ -984,38 +1276,33 @@ Code: <input name="code"><br><br>
                     "api_id": pending["api_id"],
                     "api_hash": pending["api_hash"],
                     "password_2fa": pwd,
-                    "latest_code": ""
+                    "latest_code": "",
+                    "latest_code_ts": 0
                 })
 
                 pending_logins.pop(phone, None)
 
-                return f"""
-<html>
-<head>
-<meta http-equiv="refresh" content="0;url=/admin">
-</head>
-<body>
-Login success.<br>
-Phone: {html_escape(clean_phone)}<br>
-Session: sessions/{html_escape(account_id)}.session<br>
-<a href="/admin">Back</a>
-</body>
-</html>
-"""
+                return simple_page("Login success", f'''
+<p>Phone: {html_escape(clean_phone)}</p>
+<p>Session: sessions/{html_escape(account_id)}.session</p>
+<div class="actions">
+<a class="button" href="/admin">Back</a>
+</div>
+''')
 
             future = asyncio.run_coroutine_threadsafe(_verify(), main_loop)
 
             try:
                 html = future.result(timeout=60)
             except Exception as e:
-                html = f"Timeout: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                html = message_page("Error", f"Timeout: {str(e)}")
 
             self._send_html(200, html)
             return
 
         if path == "/admin/import_session":
             if "session_file" not in files or not files["session_file"]["content"]:
-                self._send_html(200, "No file uploaded. <a href='/admin'>Back</a>")
+                self._send_html(200, message_page("Error", "No file uploaded."))
                 return
 
             file_content = files["session_file"]["content"]
@@ -1023,7 +1310,7 @@ Session: sessions/{html_escape(account_id)}.session<br>
             if not file_content.startswith(b"SQLite format 3"):
                 self._send_html(
                     200,
-                    "Invalid file. Native Telethon .session file is required. <a href='/admin'>Back</a>"
+                    message_page("Error", "Invalid file. Native Telethon .session file is required.")
                 )
                 return
 
@@ -1036,7 +1323,7 @@ Session: sessions/{html_escape(account_id)}.session<br>
             )
 
             if error:
-                self._send_html(200, f"{html_escape(error)} <a href='/admin'>Back</a>")
+                self._send_html(200, message_page("Error", error))
                 return
 
             async def _import():
@@ -1046,7 +1333,7 @@ Session: sessions/{html_escape(account_id)}.session<br>
                     with open(tmp_base + ".session", "wb") as f:
                         f.write(file_content)
                 except Exception as e:
-                    return f"Write file failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Write file failed: {str(e)}")
 
                 client = create_client(tmp_base, api_id, api_hash)
 
@@ -1069,7 +1356,7 @@ Session: sessions/{html_escape(account_id)}.session<br>
 
                     remove_session_files(tmp_base)
 
-                    return f"Import failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Import failed: {str(e)}")
 
                 clean_phone = str(real_phone).replace("+", "").strip()
                 existing_id = find_account_id_by_phone(clean_phone)
@@ -1093,7 +1380,7 @@ Session: sessions/{html_escape(account_id)}.session<br>
                 except Exception as e:
                     remove_session_files(tmp_base)
 
-                    return f"Move session failed: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                    return message_page("Error", f"Move session failed: {str(e)}")
 
                 remove_session_files(tmp_base)
 
@@ -1102,35 +1389,30 @@ Session: sessions/{html_escape(account_id)}.session<br>
                     "api_id": api_id,
                     "api_hash": api_hash,
                     "password_2fa": pwd_input,
-                    "latest_code": ""
+                    "latest_code": "",
+                    "latest_code_ts": 0
                 })
 
-                return f"""
-<html>
-<head>
-<meta http-equiv="refresh" content="0;url=/admin">
-</head>
-<body>
-Import success.<br>
-Phone: {html_escape(clean_phone)}<br>
-Session: sessions/{html_escape(account_id)}.session<br>
-<a href="/admin">Back</a>
-</body>
-</html>
-"""
+                return simple_page("Import success", f'''
+<p>Phone: {html_escape(clean_phone)}</p>
+<p>Session: sessions/{html_escape(account_id)}.session</p>
+<div class="actions">
+<a class="button" href="/admin">Back</a>
+</div>
+''')
 
             future = asyncio.run_coroutine_threadsafe(_import(), main_loop)
 
             try:
                 html = future.result(timeout=60)
             except Exception as e:
-                html = f"Timeout: {html_escape(str(e))}. <a href='/admin'>Back</a>"
+                html = message_page("Error", f"Timeout: {str(e)}")
 
             self._send_html(200, html)
             return
 
         if path.startswith("/admin/delete/"):
-            account_id = path.split("/")[-1]
+            account_id = path.split("/admin/delete/", 1)[-1].strip("/")
 
             if not is_safe_account_id(account_id):
                 self._redirect("/admin")
