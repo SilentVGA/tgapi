@@ -54,3 +54,6 @@ python3 main.py
 - 一键操作：每个账号提供 Copy（复制接码链接）、Go（打开接码页）、Delete（删除账号）三个快捷按钮。
 - 零框架依赖：完全基于 Python 内置 http.server 构建，无 Flask/FastAPI 等额外开销，128MB 内存机器轻松运行。
 - 懒加载机制：脚本启动时不预连接任何账号，仅当接码页面被访问时才动态唤醒对应客户端，空闲时自动释放连接。
+
+---
+[查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE)
