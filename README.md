@@ -19,6 +19,19 @@ python3 main.py
 
 启动后访问 http://你的IP:8000/admin 进入管理面板（默认密码 admin123，请在代码顶部修改）。
 
+
+> 对.session文件的要求：
+> 
+> 必须是 Telethon 原生 SQLite 数据库文件。
+> 
+> 文件头必须以 SQLite format 3 开头（导入时会自动校验）。
+> 
+> 不支持 StringSession 纯文本字符串。
+> 
+> 不支持 Pyrogram 的 .session 文件（底层表结构不同）。
+> 
+> 不支持 JSON 格式的自定义 session 文件。
+
 ---
 
 ## ✨ 核心功能
@@ -38,6 +51,6 @@ python3 main.py
 - 自定义 API 支持：同时保留 API_ID / API_HASH 输入框，兼容使用私有 API 生成的 session 文件。
 
 ### 🛠️ 轻量管理面板
-- 一键操作：每个账号提供 Copy（复制接码链接）、Go（蓝色按钮新标签页打开接码页）、Delete（删除账号）三个快捷按钮。
+- 一键操作：每个账号提供 Copy（复制接码链接）、Go（打开接码页）、Delete（删除账号）三个快捷按钮。
 - 零框架依赖：完全基于 Python 内置 http.server 构建，无 Flask/FastAPI 等额外开销，128MB 内存机器轻松运行。
 - 懒加载机制：脚本启动时不预连接任何账号，仅当接码页面被访问时才动态唤醒对应客户端，空闲时自动释放连接。
