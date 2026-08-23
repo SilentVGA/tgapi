@@ -17,7 +17,7 @@ python3 main.py
 ```
 > 注意：如果是受限的 Debian/Ubuntu 系统，请使用 pip install telethon --break-system-packages
 
-启动后访问 http://你的IP:8000/admin 进入管理面板（默认密码 admin123，请在代码顶部修改）。
+启动后访问 `http://你的IP:8000/admin` 进入管理面板（默认密码 admin123，请在代码顶部修改）。
 
 
 > 对.session文件的要求：
