@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
 
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = "qwert12345"
 SERVER_PORT = 8000
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
 
@@ -22,6 +22,28 @@ OFFICIAL_CLIENT_API_HASH = "b18441a1ff607e10a989891a5462e627"
 
 DEFAULT_API_ID = OFFICIAL_CLIENT_API_ID
 DEFAULT_API_HASH = OFFICIAL_CLIENT_API_HASH
+
+PLATFORM_API = {
+    "android": (6, "eb06d4abfb49dc3eeb1aeb98ae0f581e"),
+    "ios": (10840, "33c45224029d59cb3ad0c16576128f81"),
+    "desktop": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
+    "desktop_windows": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
+    "desktop_linux": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
+    "macos": (2834, "6f75bc28c47b6a361b53943a2b70d0c5"),
+    "custom": None
+}
+
+PLATFORM_OPTIONS = (
+    ("android", "Android"),
+    ("ios", "iOS"),
+    ("desktop", "Desktop"),
+    ("desktop_windows", "Desktop (Windows)"),
+    ("desktop_linux", "Desktop (Linux)"),
+    ("macos", "macOS"),
+    ("custom", "Custom")
+)
+
+SETTINGS_PATH = os.path.join(SESSIONS_DIR, "settings.json")
 
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 
@@ -66,8 +88,13 @@ COMMON_STYLE = """
     box-sizing: border-box;
 }
 
+html,
 body {
     margin: 0;
+    padding: 0;
+}
+
+body {
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -75,32 +102,33 @@ body {
     background: var(--bg);
     color: var(--fg);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
 }
 
 body.admin {
     align-items: flex-start;
-    padding: 24px 0;
+    padding: 20px 0;
 }
 
 .container {
     width: 100%;
     max-width: 430px;
-    padding: 20px;
+    padding: 16px;
 }
 
 .container.wide {
-    max-width: 860px;
+    max-width: 900px;
 }
 
 .card {
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 24px;
+    border-radius: 12px;
+    padding: 20px;
     background: var(--bg);
 }
 
 h1 {
-    margin: 0 0 18px;
+    margin: 0 0 16px;
     font-size: 18px;
     text-align: center;
     font-weight: 650;
@@ -108,13 +136,13 @@ h1 {
 }
 
 h2 {
-    margin: 24px 0 12px;
+    margin: 22px 0 10px;
     font-size: 15px;
     font-weight: 650;
 }
 
 .label {
-    margin: 0 0 6px;
+    margin: 0 0 5px;
     font-size: 11px;
     letter-spacing: .12em;
     text-transform: uppercase;
@@ -124,22 +152,22 @@ h2 {
 .value {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 18px;
-    line-height: 1.4;
+    line-height: 1.35;
     letter-spacing: .04em;
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 10px 12px;
-    margin: 0 0 18px;
+    padding: 9px 10px;
+    margin: 0 0 16px;
     text-align: center;
     word-break: break-all;
-    min-height: 46px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .status {
-    margin: 4px 0 14px;
+    margin: 2px 0 12px;
     text-align: center;
     font-size: 13px;
     color: var(--muted);
@@ -157,22 +185,26 @@ h2 {
 .actions {
     display: flex;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
 .button,
 button,
 input[type="submit"] {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 9px 16px;
     font-size: 14px;
+    line-height: 1.2;
     color: var(--fg);
     text-decoration: none;
     background: var(--bg);
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .button:active,
@@ -196,6 +228,21 @@ input[type="number"] {
     margin: 0 0 14px;
 }
 
+select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--fg);
+    margin: 0 0 14px;
+}
+
+input[type="file"] {
+    padding: 8px 10px;
+}
+
 form {
     margin: 0;
 }
@@ -207,24 +254,24 @@ form {
 .row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 10px;
 }
 
 .item {
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 12px;
-    margin: 0 0 12px;
+    padding: 10px;
+    margin: 0 0 10px;
     word-break: break-all;
 }
 
 .item-top {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    align-items: center;
+    gap: 8px;
+    align-items: flex-start;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .item-phone {
@@ -237,7 +284,7 @@ form {
 
 .item-actions {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
     align-items: center;
 }
@@ -245,6 +292,12 @@ form {
 .small {
     font-size: 12px;
     color: var(--muted);
+    margin: 2px 0;
+    word-break: break-all;
+}
+
+.platform-info {
+    margin: 0 0 12px;
 }
 
 .link {
@@ -254,7 +307,40 @@ form {
 }
 
 .inline-form {
-    display: inline;
+    display: inline-flex;
+    margin: 0;
+}
+
+.tag-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.tag-form input {
+    margin: 0;
+    flex: 1;
+    min-width: 140px;
+}
+
+@media (max-width: 640px) {
+    .row {
+        grid-template-columns: 1fr;
+    }
+
+    body.admin {
+        padding: 12px 0;
+    }
+
+    .card {
+        padding: 16px;
+    }
+
+    .item-actions {
+        width: 100%;
+    }
 }
 """
 
@@ -323,12 +409,23 @@ ADMIN_TEMPLATE = """<!doctype html>
 <input type="text" name="phone" required>
 </div>
 <div>
+<div class="label">API Platform</div>
+<select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select>
+<div class="small platform-info"></div>
+</div>
+</div>
+<div class="row">
+<div>
 <div class="label">API_ID</div>
-<input type="text" name="api_id" placeholder="official client">
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
 </div>
-</div>
+<div>
 <div class="label">API_HASH</div>
-<input type="text" name="api_hash" placeholder="official client">
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
+</div>
+</div>
+<div class="label">Tag</div>
+<input type="text" name="tag" placeholder="optional">
 <div class="actions">
 <button type="submit">Send Code</button>
 </div>
@@ -349,12 +446,23 @@ ADMIN_TEMPLATE = """<!doctype html>
 </div>
 <div class="row">
 <div>
+<div class="label">API Platform</div>
+<select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select>
+<div class="small platform-info"></div>
+</div>
+<div>
+<div class="label">Tag optional</div>
+<input type="text" name="tag">
+</div>
+</div>
+<div class="row">
+<div>
 <div class="label">API_ID optional</div>
-<input type="text" name="api_id" placeholder="official client default">
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
 </div>
 <div>
 <div class="label">API_HASH optional</div>
-<input type="text" name="api_hash" placeholder="official client default">
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
 </div>
 </div>
 <div class="actions">
@@ -387,6 +495,185 @@ function copyText(text) {
     document.body.removeChild(ta);
 }
 </script>"""
+
+PLATFORM_SCRIPT = """<script>
+var PLATFORM_DATA = __PLATFORM_DATA__;
+
+function platformText(value) {
+    if (value === "custom") {
+        return "Custom: fill API_ID and API_HASH manually.";
+    }
+
+    var item = PLATFORM_DATA[value];
+
+    if (!item) {
+        return "";
+    }
+
+    return "API_ID: " + item[0] + " | API_HASH: " + item[1];
+}
+
+function updatePlatformInfo(sel) {
+    var form = sel.form;
+
+    if (!form) {
+        return;
+    }
+
+    var info = form.querySelector(".platform-info");
+
+    if (info) {
+        info.textContent = platformText(sel.value);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    var selects = document.querySelectorAll("select.platform-select");
+
+    for (var i = 0; i < selects.length; i++) {
+        updatePlatformInfo(selects[i]);
+    }
+});
+</script>"""
+
+
+def load_settings():
+    settings = {
+        "platform": "desktop",
+        "api_id": "",
+        "api_hash": ""
+    }
+
+    try:
+        with file_lock:
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+        if isinstance(data, dict):
+            settings.update(data)
+    except Exception:
+        pass
+
+    settings["platform"] = str(settings.get("platform", "desktop") or "desktop").lower()
+
+    if settings["platform"] not in PLATFORM_API:
+        settings["platform"] = "desktop"
+
+    settings["api_id"] = str(settings.get("api_id", "") or "")
+    settings["api_hash"] = str(settings.get("api_hash", "") or "")
+
+    return settings
+
+
+def save_settings(settings):
+    clean = {
+        "platform": str(settings.get("platform", "desktop") or "desktop").lower(),
+        "api_id": str(settings.get("api_id", "") or ""),
+        "api_hash": str(settings.get("api_hash", "") or "")
+    }
+
+    if clean["platform"] not in PLATFORM_API:
+        clean["platform"] = "desktop"
+
+    with file_lock:
+        tmp = SETTINGS_PATH + ".tmp"
+
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(clean, f, ensure_ascii=False, indent=2)
+
+        os.replace(tmp, SETTINGS_PATH)
+
+
+def remember_credentials(platform, api_id_raw, api_hash_raw):
+    settings = load_settings()
+
+    settings["platform"] = platform
+
+    api_id_raw = str(api_id_raw or "").strip()
+    api_hash_raw = str(api_hash_raw or "").strip()
+
+    if api_id_raw and api_hash_raw:
+        settings["api_id"] = api_id_raw
+        settings["api_hash"] = api_hash_raw
+    else:
+        settings["api_id"] = ""
+        settings["api_hash"] = ""
+
+    save_settings(settings)
+
+
+def platform_options_html(selected):
+    options = ""
+
+    for value, label in PLATFORM_OPTIONS:
+        selected_attr = " selected" if value == selected else ""
+        options += f'<option value="{value}"{selected_attr}>{label}</option>'
+
+    return options
+
+
+def platform_display(meta):
+    raw = str(meta.get("api_platform", "") or "").strip().lower()
+
+    if raw:
+        for key, label in PLATFORM_OPTIONS:
+            if key == raw:
+                pair = PLATFORM_API.get(key)
+
+                if pair:
+                    return f"{label} ({pair[0]})"
+
+                return label
+
+    try:
+        api_id = int(meta.get("api_id") or 0)
+    except Exception:
+        api_id = 0
+
+    api_hash = str(meta.get("api_hash") or "")
+
+    if api_id and api_hash:
+        seen = set()
+
+        for key, label in PLATFORM_OPTIONS:
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            pair = PLATFORM_API.get(key)
+
+            if pair and pair[0] == api_id and pair[1] == api_hash:
+                return f"{label} ({pair[0]})"
+
+    return "-"
+
+
+def parse_credentials_with_platform(platform_raw, api_id_raw, api_hash_raw):
+    platform = str(platform_raw or "").strip().lower()
+
+    if platform not in PLATFORM_API:
+        platform = "desktop"
+
+    api_id_raw = str(api_id_raw or "").strip()
+    api_hash_raw = str(api_hash_raw or "").strip()
+
+    if api_id_raw and api_hash_raw:
+        try:
+            api_id = int(api_id_raw)
+        except Exception:
+            return None, None, platform, "Invalid API_ID."
+
+        return api_id, api_hash_raw, platform, None
+
+    if api_id_raw or api_hash_raw:
+        return None, None, platform, "API_ID and API_HASH must be both empty or both filled."
+
+    if platform == "custom":
+        return None, None, platform, "Custom platform requires API_ID and API_HASH."
+
+    api_id, api_hash = PLATFORM_API[platform]
+    return api_id, api_hash, platform, None
 
 
 def simple_page(title, body):
@@ -518,9 +805,12 @@ def load_meta(account_id):
     data.setdefault("phone", "")
     data.setdefault("api_id", DEFAULT_API_ID)
     data.setdefault("api_hash", DEFAULT_API_HASH)
+    data.setdefault("api_platform", "")
     data.setdefault("password_2fa", "")
     data.setdefault("latest_code", "")
     data.setdefault("latest_code_ts", 0)
+    data.setdefault("tag", "")
+    data.setdefault("created_at", 0)
     data["id"] = account_id
 
     return data
@@ -534,9 +824,12 @@ def save_meta(account_id, meta):
         "phone": str(meta.get("phone", "")),
         "api_id": meta.get("api_id", DEFAULT_API_ID),
         "api_hash": str(meta.get("api_hash", DEFAULT_API_HASH)),
+        "api_platform": str(meta.get("api_platform", "")),
         "password_2fa": str(meta.get("password_2fa", "")),
         "latest_code": str(meta.get("latest_code", "")),
-        "latest_code_ts": meta.get("latest_code_ts", 0)
+        "latest_code_ts": meta.get("latest_code_ts", 0),
+        "tag": str(meta.get("tag", "")),
+        "created_at": meta.get("created_at", 0)
     }
 
     try:
@@ -548,6 +841,11 @@ def save_meta(account_id, meta):
         clean["latest_code_ts"] = float(clean["latest_code_ts"] or 0)
     except Exception:
         clean["latest_code_ts"] = 0
+
+    try:
+        clean["created_at"] = float(clean["created_at"] or 0)
+    except Exception:
+        clean["created_at"] = 0
 
     path = meta_path(account_id)
 
@@ -610,19 +908,22 @@ def migrate_legacy_sessions():
                 "phone": account_id,
                 "api_id": DEFAULT_API_ID,
                 "api_hash": DEFAULT_API_HASH,
+                "api_platform": "",
                 "password_2fa": "",
                 "latest_code": "",
-                "latest_code_ts": 0
+                "latest_code_ts": 0,
+                "tag": "",
+                "created_at": 0
             })
 
         remove_session_files(session_base(account_id))
 
 
 def list_accounts():
-    accounts = []
+    records = []
 
     if not os.path.isdir(SESSIONS_DIR):
-        return accounts
+        return []
 
     for name in sorted(os.listdir(SESSIONS_DIR)):
         if not name.endswith(".session"):
@@ -643,18 +944,34 @@ def list_accounts():
                 "phone": "",
                 "api_id": DEFAULT_API_ID,
                 "api_hash": DEFAULT_API_HASH,
+                "api_platform": "",
                 "password_2fa": "",
                 "latest_code": "",
-                "latest_code_ts": 0
+                "latest_code_ts": 0,
+                "tag": "",
+                "created_at": 0
             }
 
             save_meta(account_id, meta)
             meta["id"] = account_id
 
-        accounts.append(meta)
+        sort_ts = 0
 
-    accounts.sort(key=lambda x: str(x.get("phone") or x.get("id") or ""))
-    return accounts
+        try:
+            sort_ts = float(meta.get("created_at", 0) or 0)
+        except Exception:
+            sort_ts = 0
+
+        if sort_ts <= 0:
+            try:
+                sort_ts = os.path.getmtime(session_path(account_id))
+            except Exception:
+                sort_ts = 0
+
+        records.append((sort_ts, meta))
+
+    records.sort(key=lambda item: item[0], reverse=True)
+    return [item[1] for item in records]
 
 
 def find_account_id_by_phone(phone):
@@ -731,24 +1048,6 @@ def get_credentials(meta):
         api_hash = str(meta.get("api_hash") or DEFAULT_API_HASH)
 
     return api_id, api_hash
-
-
-def parse_credentials(api_id_raw, api_hash_raw):
-    api_id_raw = str(api_id_raw or "").strip()
-    api_hash_raw = str(api_hash_raw or "").strip()
-
-    if not api_id_raw and not api_hash_raw:
-        return DEFAULT_API_ID, DEFAULT_API_HASH, None
-
-    if not api_id_raw or not api_hash_raw:
-        return None, None, "API_ID and API_HASH must be both empty or both filled."
-
-    try:
-        api_id = int(api_id_raw)
-    except Exception:
-        return None, None, "Invalid API_ID."
-
-    return api_id, api_hash_raw, None
 
 
 async def ensure_client(account_id):
@@ -1022,6 +1321,23 @@ class Handler(BaseHTTPRequestHandler):
 
             base_url = self._get_base_url()
             accounts = list_accounts()
+            settings = load_settings()
+
+            platform_options = platform_options_html(settings.get("platform", "desktop"))
+            safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True)
+            safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True)
+
+            platform_data = {}
+
+            for key, value in PLATFORM_API.items():
+                if value is None:
+                    platform_data[key] = None
+                else:
+                    platform_data[key] = [value[0], value[1]]
+
+            platform_data_json = json.dumps(platform_data)
+            platform_script = PLATFORM_SCRIPT.replace("__PLATFORM_DATA__", platform_data_json)
+            scripts = COPY_SCRIPT + platform_script
 
             items = ""
 
@@ -1029,6 +1345,8 @@ class Handler(BaseHTTPRequestHandler):
                 account_id = str(meta.get("id", ""))
                 phone = str(meta.get("phone", ""))
                 code = str(meta.get("latest_code", ""))
+                tag = str(meta.get("tag", ""))
+                login_api = platform_display(meta)
 
                 copy_value = f"+{phone}--{base_url}/getcode/{account_id}" if phone else f"{base_url}/getcode/{account_id}"
 
@@ -1036,6 +1354,9 @@ class Handler(BaseHTTPRequestHandler):
                 safe_phone = html_escape(phone or account_id)
                 safe_code = html_escape(code or "None")
                 safe_copy = html_escape(copy_value, quote=True)
+                safe_tag = html_escape(tag, quote=True)
+                safe_tag_display = html_escape(tag or "-")
+                safe_login_api = html_escape(login_api or "-")
 
                 items += f'''
 <div class="item">
@@ -1051,6 +1372,12 @@ class Handler(BaseHTTPRequestHandler):
 </div>
 <div class="item-code">Code: {safe_code}</div>
 <div class="small">ID: {safe_id}</div>
+<div class="small">Tag: {safe_tag_display}</div>
+<div class="small">Login API: {safe_login_api}</div>
+<form class="tag-form" method="post" action="/admin/tag/{safe_id}">
+<input type="text" name="tag" value="{safe_tag}" placeholder="Tag">
+<button type="submit">Save Tag</button>
+</form>
 </div>
 '''
 
@@ -1059,7 +1386,10 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__STYLE__", COMMON_STYLE)
                 .replace("__COUNT__", str(len(accounts)))
                 .replace("__ITEMS__", items or "<p>No accounts.</p>")
-                .replace("__SCRIPT__", COPY_SCRIPT)
+                .replace("__SCRIPT__", scripts)
+                .replace("__PLATFORM_OPTIONS__", platform_options)
+                .replace("__API_ID_VALUE__", safe_api_id)
+                .replace("__API_HASH_VALUE__", safe_api_hash)
             )
 
             self._send_html(200, html)
@@ -1102,18 +1432,26 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/admin/send_code":
             phone = get_first(data, "phone", "").strip()
 
-            api_id, api_hash, error = parse_credentials(
-                get_first(data, "api_id", ""),
-                get_first(data, "api_hash", "")
-            )
-
             if not phone:
                 self._send_html(200, message_page("Error", "Missing phone."))
                 return
 
+            tag = get_first(data, "tag", "").strip()
+            platform_raw = get_first(data, "platform", "")
+            api_id_raw = get_first(data, "api_id", "")
+            api_hash_raw = get_first(data, "api_hash", "")
+
+            api_id, api_hash, platform, error = parse_credentials_with_platform(
+                platform_raw,
+                api_id_raw,
+                api_hash_raw
+            )
+
             if error:
                 self._send_html(200, message_page("Error", error))
                 return
+
+            remember_credentials(platform, api_id_raw, api_hash_raw)
 
             async def _send_code():
                 tmp_base = os.path.join(SESSIONS_DIR, f"_tmp_{uuid.uuid4().hex}")
@@ -1138,12 +1476,15 @@ class Handler(BaseHTTPRequestHandler):
                         "hash": result.phone_code_hash,
                         "api_id": api_id,
                         "api_hash": api_hash,
-                        "tmp_base": tmp_base
+                        "platform": platform,
+                        "tmp_base": tmp_base,
+                        "tag": tag
                     }
 
                     return simple_page("Enter Code", f'''
 <form method="post" action="/admin/verify">
 <input type="hidden" name="phone" value="{html_escape(phone, quote=True)}">
+<input type="hidden" name="tag" value="{html_escape(tag, quote=True)}">
 <div class="label">Code</div>
 <input type="text" name="code" required>
 <div class="label">2FA Password</div>
@@ -1179,12 +1520,16 @@ class Handler(BaseHTTPRequestHandler):
             phone = get_first(data, "phone", "").strip()
             code = get_first(data, "code", "").strip()
             pwd = get_first(data, "password", "")
+            tag = get_first(data, "tag", "").strip()
 
             pending = pending_logins.get(phone)
 
             if not pending:
                 self._send_html(200, message_page("Error", "Session expired."))
                 return
+
+            if not tag:
+                tag = str(pending.get("tag", "")).strip()
 
             async def _verify():
                 client = pending["client"]
@@ -1251,6 +1596,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not is_safe_account_id(account_id):
                     account_id = str(uuid.uuid4())
 
+                old_meta = load_meta(account_id)
+                created_at = 0
+
+                if old_meta:
+                    try:
+                        created_at = float(old_meta.get("created_at", 0) or 0)
+                    except Exception:
+                        created_at = 0
+
+                if not created_at:
+                    try:
+                        if os.path.exists(session_path(account_id)):
+                            created_at = os.path.getmtime(session_path(account_id))
+                    except Exception:
+                        created_at = 0
+
+                if not created_at:
+                    created_at = time.time()
+
                 old_client = clients.pop(account_id, None)
 
                 if old_client:
@@ -1275,9 +1639,12 @@ class Handler(BaseHTTPRequestHandler):
                     "phone": clean_phone,
                     "api_id": pending["api_id"],
                     "api_hash": pending["api_hash"],
+                    "api_platform": pending.get("platform", ""),
                     "password_2fa": pwd,
                     "latest_code": "",
-                    "latest_code_ts": 0
+                    "latest_code_ts": 0,
+                    "tag": tag,
+                    "created_at": created_at
                 })
 
                 pending_logins.pop(phone, None)
@@ -1316,15 +1683,22 @@ class Handler(BaseHTTPRequestHandler):
 
             phone_input = get_first(data, "phone", "").strip()
             pwd_input = get_first(data, "password_2fa", "")
+            tag_input = get_first(data, "tag", "").strip()
+            platform_raw = get_first(data, "platform", "")
+            api_id_raw = get_first(data, "api_id", "")
+            api_hash_raw = get_first(data, "api_hash", "")
 
-            api_id, api_hash, error = parse_credentials(
-                get_first(data, "api_id", ""),
-                get_first(data, "api_hash", "")
+            api_id, api_hash, platform, error = parse_credentials_with_platform(
+                platform_raw,
+                api_id_raw,
+                api_hash_raw
             )
 
             if error:
                 self._send_html(200, message_page("Error", error))
                 return
+
+            remember_credentials(platform, api_id_raw, api_hash_raw)
 
             async def _import():
                 tmp_base = os.path.join(SESSIONS_DIR, f"_import_{uuid.uuid4().hex}")
@@ -1365,6 +1739,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not is_safe_account_id(account_id):
                     account_id = str(uuid.uuid4())
 
+                old_meta = load_meta(account_id)
+                created_at = 0
+
+                if old_meta:
+                    try:
+                        created_at = float(old_meta.get("created_at", 0) or 0)
+                    except Exception:
+                        created_at = 0
+
+                if not created_at:
+                    try:
+                        if os.path.exists(session_path(account_id)):
+                            created_at = os.path.getmtime(session_path(account_id))
+                    except Exception:
+                        created_at = 0
+
+                if not created_at:
+                    created_at = time.time()
+
                 old_client = clients.pop(account_id, None)
 
                 if old_client:
@@ -1388,9 +1781,12 @@ class Handler(BaseHTTPRequestHandler):
                     "phone": clean_phone,
                     "api_id": api_id,
                     "api_hash": api_hash,
+                    "api_platform": platform,
                     "password_2fa": pwd_input,
                     "latest_code": "",
-                    "latest_code_ts": 0
+                    "latest_code_ts": 0,
+                    "tag": tag_input,
+                    "created_at": created_at
                 })
 
                 return simple_page("Import success", f'''
@@ -1409,6 +1805,18 @@ class Handler(BaseHTTPRequestHandler):
                 html = message_page("Error", f"Timeout: {str(e)}")
 
             self._send_html(200, html)
+            return
+
+        if path.startswith("/admin/tag/"):
+            account_id = path.split("/admin/tag/", 1)[-1].strip("/")
+
+            if not is_safe_account_id(account_id):
+                self._redirect("/admin")
+                return
+
+            tag = get_first(data, "tag", "").strip()
+            update_meta(account_id, tag=tag)
+            self._redirect("/admin")
             return
 
         if path.startswith("/admin/delete/"):
