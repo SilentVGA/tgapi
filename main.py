@@ -363,6 +363,7 @@ GETCODE_TEMPLATE = ("""<!doctype html>
 <div class="__STATUS_CLASS__">__STATUS__</div>
 <div class="actions">
 <a class="button" href="/getcode/__ID__">Refresh</a>
+__DOWNLOAD_BUTTON__
 </div>
 </div>
 </div>
@@ -469,6 +470,17 @@ ADMIN_TEMPLATE = """<!doctype html>
 <button type="submit">Import</button>
 </div>
 </form>
+<h2>Session Download</h2>
+<form method="post" action="/admin/session_download">
+<div class="label">Allow session download on code pages</div>
+<label style="display:flex;align-items:center;gap:10px;margin:12px 0 14px;">
+<input type="checkbox" name="enabled" value="1"__DOWNLOAD_CHECKED__>
+<span>Enabled</span>
+</label>
+<div class="actions">
+<button type="submit">Save Setting</button>
+</div>
+</form>
 <h2>Accounts (__COUNT__)</h2>
 __ITEMS__
 <div class="actions">
@@ -541,7 +553,8 @@ def load_settings():
     settings = {
         "platform": "desktop",
         "api_id": "",
-        "api_hash": ""
+        "api_hash": "",
+        "allow_session_download": False
     }
 
     try:
@@ -561,6 +574,7 @@ def load_settings():
 
     settings["api_id"] = str(settings.get("api_id", "") or "")
     settings["api_hash"] = str(settings.get("api_hash", "") or "")
+    settings["allow_session_download"] = bool(settings.get("allow_session_download", False))
 
     return settings
 
@@ -569,7 +583,8 @@ def save_settings(settings):
     clean = {
         "platform": str(settings.get("platform", "desktop") or "desktop").lower(),
         "api_id": str(settings.get("api_id", "") or ""),
-        "api_hash": str(settings.get("api_hash", "") or "")
+        "api_hash": str(settings.get("api_hash", "") or ""),
+        "allow_session_download": bool(settings.get("allow_session_download", False))
     }
 
     if clean["platform"] not in PLATFORM_API:
@@ -1292,6 +1307,13 @@ class Handler(BaseHTTPRequestHandler):
                 code_html = "Waiting..."
 
             twofa = str(meta.get("password_2fa", "")) or "None"
+            settings = load_settings()
+            if settings.get("allow_session_download", False):
+                download_button = '<a class="button" href="/downloadsession/{0}">Download Session</a>'.format(
+                    html_escape(account_id, quote=True)
+                )
+            else:
+                download_button = ""
 
             status_text, status_class = get_status_display(status)
 
@@ -1302,9 +1324,44 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__ID__", html_escape(account_id, quote=True))
                 .replace("__STATUS__", html_escape(status_text))
                 .replace("__STATUS_CLASS__", status_class)
+                .replace("__DOWNLOAD_BUTTON__", download_button)
             )
 
             self._send_html(200, html)
+            return
+
+        if path.startswith("/downloadsession/"):
+            account_id = path.split("/downloadsession/", 1)[-1].strip("/")
+
+            if not is_safe_account_id(account_id):
+                self._send_html(404, "Not found")
+                return
+
+            settings = load_settings()
+            if not settings.get("allow_session_download", False):
+                self._send_html(403, "Session download is disabled.")
+                return
+
+            path_to_session = session_path(account_id)
+            if not os.path.isfile(path_to_session):
+                self._send_html(404, "Not found")
+                return
+
+            try:
+                with open(path_to_session, "rb") as f:
+                    data = f.read()
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{account_id}.session"'
+                )
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception:
+                self._send_html(500, "Download failed.")
             return
 
         if path == "/admin/logout":
@@ -1326,6 +1383,7 @@ class Handler(BaseHTTPRequestHandler):
             platform_options = platform_options_html(settings.get("platform", "desktop"))
             safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True)
             safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True)
+            download_checked = " checked" if settings.get("allow_session_download", False) else ""
 
             platform_data = {}
 
@@ -1390,6 +1448,7 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__PLATFORM_OPTIONS__", platform_options)
                 .replace("__API_ID_VALUE__", safe_api_id)
                 .replace("__API_HASH_VALUE__", safe_api_hash)
+                .replace("__DOWNLOAD_CHECKED__", download_checked)
             )
 
             self._send_html(200, html)
@@ -1427,6 +1486,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if not self._admin_logged_in():
             self._redirect("/admin/login")
+            return
+
+        if path == "/admin/session_download":
+            enabled = get_first(data, "enabled", "") == "1"
+            settings = load_settings()
+            settings["allow_session_download"] = enabled
+            save_settings(settings)
+            self._redirect("/admin")
             return
 
         if path == "/admin/send_code":
