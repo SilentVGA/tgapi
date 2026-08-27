@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
 
-ADMIN_PASSWORD = "qwert12345"
+ADMIN_PASSWORD = "admin123"
 SERVER_PORT = 8000
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
 
