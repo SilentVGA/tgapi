@@ -56,4 +56,4 @@ python3 main.py
 - 懒加载机制：脚本启动时不预连接任何账号，仅当接码页面被访问时才动态唤醒对应客户端，空闲时自动释放连接。
 
 ---
-[查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE)
+[查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE) [联系作者](https://t.me/lrlbl)
