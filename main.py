@@ -6,6 +6,7 @@ import json
 import shutil
 import threading
 import time
+import secrets
 from html import escape as html_escape
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -52,6 +53,8 @@ clients = {}
 pending_logins = {}
 client_locks = {}
 file_lock = threading.RLock()
+admin_sessions = set()
+admin_sessions_lock = threading.Lock()
 ACCOUNT_STATUS_CACHE = {}
 ACCOUNT_STATUS_TTL = 30
 
@@ -1266,8 +1269,24 @@ class Handler(BaseHTTPRequestHandler):
 
         return f"{proto}://{host}"
 
+    def _get_admin_session_token(self):
+        cookie = self.headers.get("Cookie", "")
+
+        for item in cookie.split(";"):
+            item = item.strip()
+            if item.startswith("admin_session="):
+                return item.split("=", 1)[1]
+
+        return ""
+
     def _admin_logged_in(self):
-        return "admin_session=valid" in self.headers.get("Cookie", "")
+        token = self._get_admin_session_token()
+
+        if not token:
+            return False
+
+        with admin_sessions_lock:
+            return token in admin_sessions
 
     def do_GET(self):
         path = urlparse(self.path).path
@@ -1388,9 +1407,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/admin/logout":
+            token = self._get_admin_session_token()
+
+            if token:
+                with admin_sessions_lock:
+                    admin_sessions.discard(token)
+
             self._redirect(
                 "/admin/login",
-                "admin_session=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/"
+                "admin_session=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; HttpOnly; SameSite=Strict"
             )
             return
 
@@ -1502,7 +1527,15 @@ class Handler(BaseHTTPRequestHandler):
             pwd = get_first(data, "pwd", "")
 
             if pwd == ADMIN_PASSWORD:
-                self._redirect("/admin", "admin_session=valid; Path=/; HttpOnly")
+                token = secrets.token_urlsafe(32)
+
+                with admin_sessions_lock:
+                    admin_sessions.add(token)
+
+                self._redirect(
+                    "/admin",
+                    f"admin_session={token}; Path=/; HttpOnly; SameSite=Strict"
+                )
             else:
                 page = simple_page(
                     "Admin Login",
@@ -1721,7 +1754,7 @@ class Handler(BaseHTTPRequestHandler):
                     return message_page("Error", f"Move session failed: {str(e)}")
 
                 remove_session_files(tmp_base)
-4
+
                 save_meta(account_id, {
                     "phone": clean_phone,
                     "api_id": pending["api_id"],
