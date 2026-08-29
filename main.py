@@ -415,14 +415,14 @@ ADMIN_TEMPLATE = """<!doctype html>
 <div class="small platform-info"></div>
 </div>
 </div>
-<div class="row">
+<div class="row custom-api-fields">
 <div>
 <div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
 </div>
 <div>
 <div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
 </div>
 </div>
 <div class="label">Tag</div>
@@ -456,14 +456,14 @@ ADMIN_TEMPLATE = """<!doctype html>
 <input type="text" name="tag">
 </div>
 </div>
-<div class="row">
+<div class="row custom-api-fields">
 <div>
-<div class="label">API_ID optional</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
+<div class="label">API_ID</div>
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
 </div>
 <div>
-<div class="label">API_HASH optional</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
+<div class="label">API_HASH</div>
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
 </div>
 </div>
 <div class="actions">
@@ -1371,9 +1371,14 @@ class Handler(BaseHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
+                api_id, api_hash = get_credentials(meta)
+                phone = str(meta.get("phone", "") or "").strip()
+                if phone and not phone.startswith("+"):
+                    phone = "+" + phone
+                download_name = f"{phone}-{api_id}-{api_hash}.session"
                 self.send_header(
                     "Content-Disposition",
-                    f'attachment; filename="{account_id}.session"'
+                    f'attachment; filename="{download_name}"'
                 )
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
@@ -1472,7 +1477,6 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__PLATFORM_OPTIONS__", platform_options)
                 .replace("__API_ID_VALUE__", safe_api_id)
                 .replace("__API_HASH_VALUE__", safe_api_hash)
-                .replace("__DOWNLOAD_CHECKED__", download_checked)
             )
 
             self._send_html(200, html)
@@ -1717,7 +1721,7 @@ class Handler(BaseHTTPRequestHandler):
                     return message_page("Error", f"Move session failed: {str(e)}")
 
                 remove_session_files(tmp_base)
-
+4
                 save_meta(account_id, {
                     "phone": clean_phone,
                     "api_id": pending["api_id"],
