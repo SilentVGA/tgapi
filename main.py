@@ -415,14 +415,14 @@ ADMIN_TEMPLATE = """<!doctype html>
 <div class="small platform-info"></div>
 </div>
 </div>
-<div class="row">
+<div class="row custom-api-fields">
 <div>
 <div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
 </div>
 <div>
 <div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
 </div>
 </div>
 <div class="label">Tag</div>
@@ -456,29 +456,18 @@ ADMIN_TEMPLATE = """<!doctype html>
 <input type="text" name="tag">
 </div>
 </div>
-<div class="row">
+<div class="row custom-api-fields">
 <div>
-<div class="label">API_ID optional</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
+<div class="label">API_ID</div>
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
 </div>
 <div>
-<div class="label">API_HASH optional</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
+<div class="label">API_HASH</div>
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
 </div>
 </div>
 <div class="actions">
 <button type="submit">Import</button>
-</div>
-</form>
-<h2>Session Download</h2>
-<form method="post" action="/admin/session_download">
-<div class="label">Allow session download on code pages</div>
-<label style="display:flex;align-items:center;gap:10px;margin:12px 0 14px;">
-<input type="checkbox" name="enabled" value="1"__DOWNLOAD_CHECKED__>
-<span>Enabled</span>
-</label>
-<div class="actions">
-<button type="submit">Save Setting</button>
 </div>
 </form>
 <h2>Accounts (__COUNT__)</h2>
@@ -513,7 +502,7 @@ var PLATFORM_DATA = __PLATFORM_DATA__;
 
 function platformText(value) {
     if (value === "custom") {
-        return "Custom: fill API_ID and API_HASH manually.";
+        return "Custom API credentials.";
     }
 
     var item = PLATFORM_DATA[value];
@@ -533,9 +522,19 @@ function updatePlatformInfo(sel) {
     }
 
     var info = form.querySelector(".platform-info");
+    var fields = form.querySelectorAll(".custom-api-fields input");
+    var custom = sel.value === "custom";
 
     if (info) {
         info.textContent = platformText(sel.value);
+    }
+
+    for (var i = 0; i < fields.length; i++) {
+        fields[i].disabled = !custom;
+        fields[i].required = custom;
+        if (!custom) {
+            fields[i].value = "";
+        }
     }
 }
 
@@ -549,13 +548,14 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>"""
 
 
+
 def load_settings():
     settings = {
         "platform": "desktop",
         "api_id": "",
-        "api_hash": "",
-        "allow_session_download": False
+        "api_hash": ""
     }
+    changed = False
 
     try:
         with file_lock:
@@ -571,24 +571,41 @@ def load_settings():
 
     if settings["platform"] not in PLATFORM_API:
         settings["platform"] = "desktop"
+        changed = True
 
     settings["api_id"] = str(settings.get("api_id", "") or "")
     settings["api_hash"] = str(settings.get("api_hash", "") or "")
-    settings["allow_session_download"] = bool(settings.get("allow_session_download", False))
+
+    if settings["platform"] != "custom":
+        if settings["api_id"] or settings["api_hash"]:
+            settings["api_id"] = ""
+            settings["api_hash"] = ""
+            changed = True
+
+    if changed:
+        save_settings(settings)
 
     return settings
 
 
 def save_settings(settings):
-    clean = {
-        "platform": str(settings.get("platform", "desktop") or "desktop").lower(),
-        "api_id": str(settings.get("api_id", "") or ""),
-        "api_hash": str(settings.get("api_hash", "") or ""),
-        "allow_session_download": bool(settings.get("allow_session_download", False))
-    }
+    platform = str(settings.get("platform", "desktop") or "desktop").lower()
 
-    if clean["platform"] not in PLATFORM_API:
-        clean["platform"] = "desktop"
+    if platform not in PLATFORM_API:
+        platform = "desktop"
+
+    api_id = str(settings.get("api_id", "") or "").strip()
+    api_hash = str(settings.get("api_hash", "") or "").strip()
+
+    if platform != "custom":
+        api_id = ""
+        api_hash = ""
+
+    clean = {
+        "platform": platform,
+        "api_id": api_id,
+        "api_hash": api_hash
+    }
 
     with file_lock:
         tmp = SETTINGS_PATH + ".tmp"
@@ -600,16 +617,13 @@ def save_settings(settings):
 
 
 def remember_credentials(platform, api_id_raw, api_hash_raw):
+    platform = str(platform or "").strip().lower()
     settings = load_settings()
-
     settings["platform"] = platform
 
-    api_id_raw = str(api_id_raw or "").strip()
-    api_hash_raw = str(api_hash_raw or "").strip()
-
-    if api_id_raw and api_hash_raw:
-        settings["api_id"] = api_id_raw
-        settings["api_hash"] = api_hash_raw
+    if platform == "custom":
+        settings["api_id"] = str(api_id_raw or "").strip()
+        settings["api_hash"] = str(api_hash_raw or "").strip()
     else:
         settings["api_id"] = ""
         settings["api_hash"] = ""
@@ -826,6 +840,8 @@ def load_meta(account_id):
     data.setdefault("latest_code_ts", 0)
     data.setdefault("tag", "")
     data.setdefault("created_at", 0)
+    data.setdefault("allow_session_download", False)
+    data["allow_session_download"] = bool(data.get("allow_session_download", False))
     data["id"] = account_id
 
     return data
@@ -844,7 +860,8 @@ def save_meta(account_id, meta):
         "latest_code": str(meta.get("latest_code", "")),
         "latest_code_ts": meta.get("latest_code_ts", 0),
         "tag": str(meta.get("tag", "")),
-        "created_at": meta.get("created_at", 0)
+        "created_at": meta.get("created_at", 0),
+        "allow_session_download": bool(meta.get("allow_session_download", False))
     }
 
     try:
@@ -928,7 +945,8 @@ def migrate_legacy_sessions():
                 "latest_code": "",
                 "latest_code_ts": 0,
                 "tag": "",
-                "created_at": 0
+                "created_at": 0,
+                "allow_session_download": False
             })
 
         remove_session_files(session_base(account_id))
@@ -964,7 +982,8 @@ def list_accounts():
                 "latest_code": "",
                 "latest_code_ts": 0,
                 "tag": "",
-                "created_at": 0
+                "created_at": 0,
+                "allow_session_download": False
             }
 
             save_meta(account_id, meta)
@@ -1307,8 +1326,7 @@ class Handler(BaseHTTPRequestHandler):
                 code_html = "Waiting..."
 
             twofa = str(meta.get("password_2fa", "")) or "None"
-            settings = load_settings()
-            if settings.get("allow_session_download", False):
+            if meta.get("allow_session_download", False):
                 download_button = '<a class="button" href="/downloadsession/{0}">Download Session</a>'.format(
                     html_escape(account_id, quote=True)
                 )
@@ -1337,8 +1355,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_html(404, "Not found")
                 return
 
-            settings = load_settings()
-            if not settings.get("allow_session_download", False):
+            meta = load_meta(account_id)
+            if meta is None or not meta.get("allow_session_download", False):
                 self._send_html(403, "Session download is disabled.")
                 return
 
@@ -1381,9 +1399,8 @@ class Handler(BaseHTTPRequestHandler):
             settings = load_settings()
 
             platform_options = platform_options_html(settings.get("platform", "desktop"))
-            safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True)
-            safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True)
-            download_checked = " checked" if settings.get("allow_session_download", False) else ""
+            safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True) if settings.get("platform") == "custom" else ""
+            safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True) if settings.get("platform") == "custom" else ""
 
             platform_data = {}
 
@@ -1415,6 +1432,7 @@ class Handler(BaseHTTPRequestHandler):
                 safe_tag = html_escape(tag, quote=True)
                 safe_tag_display = html_escape(tag or "-")
                 safe_login_api = html_escape(login_api or "-")
+                session_download_checked = " checked" if meta.get("allow_session_download", False) else ""
 
                 items += f'''
 <div class="item">
@@ -1432,6 +1450,12 @@ class Handler(BaseHTTPRequestHandler):
 <div class="small">ID: {safe_id}</div>
 <div class="small">Tag: {safe_tag_display}</div>
 <div class="small">Login API: {safe_login_api}</div>
+<form class="tag-form" method="post" action="/admin/session_download/{safe_id}">
+<label style="display:flex;align-items:center;gap:10px;">
+<input type="checkbox" name="enabled" value="1"{session_download_checked} onchange="this.form.submit()">
+<span>Session download</span>
+</label>
+</form>
 <form class="tag-form" method="post" action="/admin/tag/{safe_id}">
 <input type="text" name="tag" value="{safe_tag}" placeholder="Tag">
 <button type="submit">Save Tag</button>
@@ -1448,7 +1472,6 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__PLATFORM_OPTIONS__", platform_options)
                 .replace("__API_ID_VALUE__", safe_api_id)
                 .replace("__API_HASH_VALUE__", safe_api_hash)
-                .replace("__DOWNLOAD_CHECKED__", download_checked)
             )
 
             self._send_html(200, html)
@@ -1486,14 +1509,6 @@ class Handler(BaseHTTPRequestHandler):
 
         if not self._admin_logged_in():
             self._redirect("/admin/login")
-            return
-
-        if path == "/admin/session_download":
-            enabled = get_first(data, "enabled", "") == "1"
-            settings = load_settings()
-            settings["allow_session_download"] = enabled
-            save_settings(settings)
-            self._redirect("/admin")
             return
 
         if path == "/admin/send_code":
@@ -1711,7 +1726,8 @@ class Handler(BaseHTTPRequestHandler):
                     "latest_code": "",
                     "latest_code_ts": 0,
                     "tag": tag,
-                    "created_at": created_at
+                    "created_at": created_at,
+                    "allow_session_download": False
                 })
 
                 pending_logins.pop(phone, None)
@@ -1853,7 +1869,8 @@ class Handler(BaseHTTPRequestHandler):
                     "latest_code": "",
                     "latest_code_ts": 0,
                     "tag": tag_input,
-                    "created_at": created_at
+                    "created_at": created_at,
+                    "allow_session_download": False
                 })
 
                 return simple_page("Import success", f'''
@@ -1872,6 +1889,23 @@ class Handler(BaseHTTPRequestHandler):
                 html = message_page("Error", f"Timeout: {str(e)}")
 
             self._send_html(200, html)
+            return
+
+        if path.startswith("/admin/session_download/"):
+            account_id = path.split("/admin/session_download/", 1)[-1].strip("/")
+
+            if not is_safe_account_id(account_id):
+                self._redirect("/admin")
+                return
+
+            meta = load_meta(account_id)
+            if meta is not None and os.path.exists(session_path(account_id)):
+                update_meta(
+                    account_id,
+                    allow_session_download=get_first(data, "enabled", "") == "1"
+                )
+
+            self._redirect("/admin")
             return
 
         if path.startswith("/admin/tag/"):
