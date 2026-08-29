@@ -1,6 +1,6 @@
 # tgapi - 极简 Telegram 接码系统
 
-一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收网站。支持直接上传、下载.session文件。
+一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收网站。支持直接上传、下载 Telethon `.session` 文件。
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -15,45 +15,164 @@ apt install python3 python3-pip
 pip install telethon
 python3 main.py
 ```
-> 注意：如果是受限的 Debian/Ubuntu 系统，请使用 pip install telethon --break-system-packages
 
-启动后访问 `http://你的IP:8000/admin` 进入管理面板（默认密码 admin123，请在代码顶部修改）。
+> 注意：如果是受限的 Debian/Ubuntu 系统，请使用 `pip install telethon --break-system-packages`
 
+启动后访问 `http://你的IP:8000/admin` 进入管理面板。
 
-> 对.session文件的要求：
-> 
-> 必须是 Telethon 原生 SQLite 数据库文件。
-> 
-> 文件头必须以 SQLite format 3 开头（导入时会自动校验）。
-> 
-> 不支持 StringSession 纯文本字符串。
-> 
-> 不支持 Pyrogram 的 .session 文件（底层表结构不同）。
-> 
-> 不支持 JSON 格式的自定义 session 文件。
+默认管理员密码为 `admin123`，请在代码顶部修改：
+
+```python
+ADMIN_PASSWORD = "admin123"
+```
+
+> 对 `.session` 文件的要求：
+>
+> - 必须是 Telethon 原生 SQLite 数据库文件。
+> - 文件头必须以 `SQLite format 3` 开头，导入时会自动校验。
+> - 不支持 StringSession 纯文本字符串。
+> - 不支持 Pyrogram 的 `.session` 文件。
+> - 不支持 JSON 格式的自定义 Session 文件。
 
 ---
 
 ## ✨ 核心功能
 
-### 🎯 现代化接码页面
-- UUID 安全隔离：接码链接使用随机 UUID（如 /getcode/a1b2c3d4-...），不在 URL 中暴露手机号，防止遍历攻击。
-- 现代 UI 设计：采用卡片式布局，视觉清晰舒适。
-- 自动检测账号状态，监控账号是否死亡
+### 🎯 接码页面
 
-### 📂 原生 .session 文件存储
-- 告别 SQLite 数据库：每个账号独立保存为 Telethon 原生 .session 文件 + .meta.json 元数据文件。
-- 格式完全兼容：生成的 .session 文件可直接被 tg-transformer、opentele 及任何标准 Telethon 脚本加载使用。
-- 热插拔管理：支持在后台直接上传外部 .session 文件导入，也支持通过手机号+验证码在线登录生成。
+- UUID 随机账号 ID，接码链接不会直接暴露手机号。
+- 自动显示最新 Telegram 验证码。
+- 支持显示账号保存的 2FA 密码。
+- 支持手动刷新。
+- 自动检测 Session 和账号状态。
+- Session 下载功能默认开启。
 
-### 🔑 灵活的 API 配置
-- 官方 API 默认：内置 Telegram Desktop 官方 API（api_id=2040），添加账号时无需手动填写即可直接使用。
-- 自定义 API 支持：同时保留 API_ID / API_HASH 输入框，兼容使用私有 API 生成的 session 文件。
+### 📂 原生 `.session` 文件管理
+
+每个账号独立保存为 Telethon 原生 `.session` 文件和 `.meta.json` 元数据文件。
+
+支持：
+
+- 后台直接上传 `.session` 文件。
+- 手机号 + 验证码登录生成 `.session`。
+- 删除服务器上的本地 Session。
+- 下载原始 Telethon `.session` 文件。
+
+删除账号只会删除服务器上的本地 `.session`、`.session-journal` 和 `.meta.json` 文件，不主动注销 Telegram 账号。
+
+### ⬇️ Session 下载与文件名识别
+
+Session 下载默认开启。
+
+下载文件名格式：
+
+```text
++123456789-2FA-API_ID-API_HASH.session
+```
+
+上传 `.session` 文件时，系统会自动尝试从文件名识别：
+
+- 手机号
+- 2FA
+- API_ID
+- API_HASH
+
+系统从右侧识别 API_ID 和 API_HASH，因此 2FA 中包含 `-` 时也可以正常解析。
+
+如果管理面板中手动填写了对应字段，则优先使用手动填写的数据。
+
+### 🔑 API 平台支持
+
+支持：
+
+- Android
+- iOS
+- Desktop
+- Desktop Windows
+- Desktop Linux
+- macOS
+- Custom API
+
+默认使用 Telegram Desktop API。添加账号和导入 Session 时均可选择 API 平台，Custom 模式可手动填写 API_ID 和 API_HASH。
+
+### 🏷️ Tag 标签
+
+每个账号支持自定义 Tag，用于后台区分和管理账号，并可随时修改。
 
 ### 🛠️ 轻量管理面板
-- 一键操作：每个账号提供 Copy（复制接码链接）、Go（打开接码页）、Delete（删除账号）三个快捷按钮。
-- 零框架依赖：完全基于 Python 内置 http.server 构建，无 Flask/FastAPI 等额外开销，128MB 内存机器轻松运行。
-- 懒加载机制：脚本启动时不预连接任何账号，仅当接码页面被访问时才动态唤醒对应客户端，空闲时自动释放连接。
+
+每个账号提供：
+
+- **Copy**：复制接码链接。
+- **Go**：打开接码页面。
+- **Delete**：删除服务器上的本地账号数据。
+- **Session download**：开启或关闭 Session 下载。
+- **Tag**：修改账号标签。
+
+新登录和新导入的账号默认开启 Session 下载。
+
+### ⚡ 按需连接
+
+脚本启动时不会主动连接所有 Telegram 账号，仅在访问对应接码页面时动态连接对应客户端，更适合低内存服务器。
+
+如果 Session 已失效、被其他客户端注销、无法授权或账号异常，接码页面会显示对应状态。
 
 ---
-[查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE) [联系作者](https://t.me/lrlbl)
+
+## 📁 文件结构
+
+```text
+tgapi/
+├── main.py
+└── sessions/
+    ├── settings.json
+    ├── UUID.session
+    ├── UUID.meta.json
+    └── ...
+```
+
+| 文件 | 用途 |
+|---|---|
+| `main.py` | 主程序 |
+| `sessions/*.session` | Telethon 原生 Session |
+| `sessions/*.meta.json` | 账号元数据 |
+| `sessions/settings.json` | API 平台相关设置 |
+
+账号文件使用随机 UUID 保存，不直接使用手机号作为服务器文件名。
+
+---
+
+## 🔒 管理员登录
+
+管理面板使用单个管理员密码。
+
+默认：
+
+```text
+admin123
+```
+
+修改 `main.py`：
+
+```python
+ADMIN_PASSWORD = "你的密码"
+```
+
+即可更换管理员密码。
+
+---
+
+## 💾 轻量运行
+
+项目仅依赖：
+
+- Python 标准库
+- Telethon
+
+不需要 Flask、FastAPI、Django、MySQL、Redis 或 Nginx。
+
+Web 服务直接使用 Python 内置 `http.server`，账号数据使用 Telethon SQLite Session + JSON，适合 NAT VPS、低内存 VPS 和轻量服务器。
+
+---
+
+[查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE) · [联系作者](https://t.me/lrlbl)
