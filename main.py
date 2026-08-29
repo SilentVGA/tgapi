@@ -843,8 +843,8 @@ def load_meta(account_id):
     data.setdefault("latest_code_ts", 0)
     data.setdefault("tag", "")
     data.setdefault("created_at", 0)
-    data.setdefault("allow_session_download", False)
-    data["allow_session_download"] = bool(data.get("allow_session_download", False))
+    data.setdefault("allow_session_download", True)
+    data["allow_session_download"] = bool(data.get("allow_session_download", True))
     data["id"] = account_id
 
     return data
@@ -864,7 +864,7 @@ def save_meta(account_id, meta):
         "latest_code_ts": meta.get("latest_code_ts", 0),
         "tag": str(meta.get("tag", "")),
         "created_at": meta.get("created_at", 0),
-        "allow_session_download": bool(meta.get("allow_session_download", False))
+        "allow_session_download": bool(meta.get("allow_session_download", True))
     }
 
     try:
@@ -949,7 +949,7 @@ def migrate_legacy_sessions():
                 "latest_code_ts": 0,
                 "tag": "",
                 "created_at": 0,
-                "allow_session_download": False
+                "allow_session_download": True
             })
 
         remove_session_files(session_base(account_id))
@@ -986,7 +986,7 @@ def list_accounts():
                 "latest_code_ts": 0,
                 "tag": "",
                 "created_at": 0,
-                "allow_session_download": False
+                "allow_session_download": True
             }
 
             save_meta(account_id, meta)
@@ -1394,7 +1394,9 @@ class Handler(BaseHTTPRequestHandler):
                 phone = str(meta.get("phone", "") or "").strip()
                 if phone and not phone.startswith("+"):
                     phone = "+" + phone
-                download_name = f"{phone}-{api_id}-{api_hash}.session"
+                password_2fa = str(meta.get("password_2fa", "") or "").strip() or "None"
+                safe_password_2fa = password_2fa.replace("/", "_").replace("\\", "_").replace('"', "_")
+                download_name = f"{phone}-{safe_password_2fa}-{api_id}-{api_hash}.session"
                 self.send_header(
                     "Content-Disposition",
                     f'attachment; filename="{download_name}"'
@@ -1765,7 +1767,7 @@ class Handler(BaseHTTPRequestHandler):
                     "latest_code_ts": 0,
                     "tag": tag,
                     "created_at": created_at,
-                    "allow_session_download": False
+                    "allow_session_download": True
                 })
 
                 pending_logins.pop(phone, None)
@@ -1802,12 +1804,37 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            phone_input = get_first(data, "phone", "").strip()
-            pwd_input = get_first(data, "password_2fa", "")
+            uploaded_filename = str(files["session_file"].get("filename", "") or "").strip()
+
+            # Supported filename format:
+            # +123456789-2FA-API_ID-API_HASH.session
+            # Parse API_HASH, API_ID, 2FA and phone from the right so 2FA may contain "-".
+            parsed_phone = ""
+            parsed_pwd = ""
+            parsed_api_id = ""
+            parsed_api_hash = ""
+            filename_stem = os.path.basename(uploaded_filename)
+            if filename_stem.lower().endswith(".session"):
+                filename_stem = filename_stem[:-8]
+            parts = filename_stem.rsplit("-", 3)
+            if len(parts) == 4:
+                parsed_phone, parsed_pwd, parsed_api_id, parsed_api_hash = parts
+                parsed_phone = parsed_phone.strip()
+                parsed_pwd = parsed_pwd.strip()
+                parsed_api_id = parsed_api_id.strip()
+                parsed_api_hash = parsed_api_hash.strip()
+                if parsed_phone.startswith("+"):
+                    parsed_phone = parsed_phone[1:]
+                if parsed_pwd.lower() in ("none", "null", "-"):
+                    parsed_pwd = ""
+
+            # Explicit form values always take priority over filename values.
+            phone_input = get_first(data, "phone", "").strip() or parsed_phone
+            pwd_input = get_first(data, "password_2fa", "") or parsed_pwd
             tag_input = get_first(data, "tag", "").strip()
             platform_raw = get_first(data, "platform", "")
-            api_id_raw = get_first(data, "api_id", "")
-            api_hash_raw = get_first(data, "api_hash", "")
+            api_id_raw = get_first(data, "api_id", "").strip() or parsed_api_id
+            api_hash_raw = get_first(data, "api_hash", "").strip() or parsed_api_hash
 
             api_id, api_hash, platform, error = parse_credentials_with_platform(
                 platform_raw,
@@ -1908,7 +1935,7 @@ class Handler(BaseHTTPRequestHandler):
                     "latest_code_ts": 0,
                     "tag": tag_input,
                     "created_at": created_at,
-                    "allow_session_download": False
+                    "allow_session_download": True
                 })
 
                 return simple_page("Import success", f'''
@@ -1968,10 +1995,13 @@ class Handler(BaseHTTPRequestHandler):
             client = clients.pop(account_id, None)
 
             if client:
-                future = asyncio.run_coroutine_threadsafe(client.disconnect(), main_loop)
-
+                # Do not wait for disconnect here. Waiting inside the HTTP request
+                # can cause reverse proxies to return 502/504 during deletion.
                 try:
-                    future.result(timeout=5)
+                    asyncio.run_coroutine_threadsafe(
+                        client.disconnect(),
+                        main_loop
+                    )
                 except Exception:
                     pass
 
