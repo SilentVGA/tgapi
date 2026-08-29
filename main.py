@@ -415,14 +415,14 @@ ADMIN_TEMPLATE = """<!doctype html>
 <div class="small platform-info"></div>
 </div>
 </div>
-<div class="row custom-api-fields">
+<div class="row">
 <div>
 <div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
 </div>
 <div>
 <div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
 </div>
 </div>
 <div class="label">Tag</div>
@@ -456,14 +456,14 @@ ADMIN_TEMPLATE = """<!doctype html>
 <input type="text" name="tag">
 </div>
 </div>
-<div class="row custom-api-fields">
+<div class="row">
 <div>
-<div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
+<div class="label">API_ID optional</div>
+<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="platform default">
 </div>
 <div>
-<div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
+<div class="label">API_HASH optional</div>
+<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="platform default">
 </div>
 </div>
 <div class="actions">
@@ -1472,6 +1472,7 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__PLATFORM_OPTIONS__", platform_options)
                 .replace("__API_ID_VALUE__", safe_api_id)
                 .replace("__API_HASH_VALUE__", safe_api_hash)
+                .replace("__DOWNLOAD_CHECKED__", download_checked)
             )
 
             self._send_html(200, html)
