@@ -1,6 +1,6 @@
 # tgapi - 极简 Telegram 接码系统
 
-一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收网站。支持直接上传、下载 Telethon `.session` 文件。
+一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收 Python 脚本。支持直接上传、下载 Telethon `.session` 文件。
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
