@@ -70,281 +70,9 @@ BANNED_EXCEPTION_NAMES = {
 }
 
 COMMON_STYLE = """
-:root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #000000;
-    --muted: #555555;
-    --border: #000000;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #000000;
-        --fg: #ffffff;
-        --muted: #aaaaaa;
-        --border: #ffffff;
-    }
-}
-
-* {
-    box-sizing: border-box;
-}
-
-html,
-body {
-    margin: 0;
-    padding: 0;
-}
-
-body {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    -webkit-text-size-adjust: 100%;
-}
-
-body.admin {
-    align-items: flex-start;
-    padding: 20px 0;
-}
-
-.container {
-    width: 100%;
-    max-width: 430px;
-    padding: 16px;
-}
-
-.container.wide {
-    max-width: 900px;
-}
-
-.card {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    background: var(--bg);
-}
-
-h1 {
-    margin: 0 0 16px;
-    font-size: 18px;
-    text-align: center;
-    font-weight: 650;
-    letter-spacing: .02em;
-}
-
-h2 {
-    margin: 22px 0 10px;
-    font-size: 15px;
-    font-weight: 650;
-}
-
-.label {
-    margin: 0 0 5px;
-    font-size: 11px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--muted);
-}
-
-.value {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    font-size: 18px;
-    line-height: 1.35;
-    letter-spacing: .04em;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 9px 10px;
-    margin: 0 0 16px;
-    text-align: center;
-    word-break: break-all;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.status {
-    margin: 2px 0 12px;
-    text-align: center;
-    font-size: 13px;
-    color: var(--muted);
-}
-
-.status.error {
-    font-weight: 700;
-    color: var(--fg);
-}
-
-.status.warn {
-    font-style: italic;
-}
-
-.actions {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.button,
-button,
-input[type="submit"] {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 9px 16px;
-    font-size: 14px;
-    line-height: 1.2;
-    color: var(--fg);
-    text-decoration: none;
-    background: var(--bg);
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.button:active,
-button:active,
-input[type="submit"]:active {
-    opacity: .7;
-}
-
-.input,
-input[type="text"],
-input[type="password"],
-input[type="file"],
-input[type="number"] {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 14px;
-    background: var(--bg);
-    color: var(--fg);
-    margin: 0 0 14px;
-}
-
-select {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 9px 10px;
-    font-size: 14px;
-    background: var(--bg);
-    color: var(--fg);
-    margin: 0 0 14px;
-}
-
-input[type="file"] {
-    padding: 8px 10px;
-}
-
-form {
-    margin: 0;
-}
-
-.field {
-    margin: 0 0 14px;
-}
-
-.row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.item {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
-    margin: 0 0 10px;
-    word-break: break-all;
-}
-
-.item-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    margin-bottom: 6px;
-}
-
-.item-phone {
-    font-weight: 650;
-}
-
-.item-code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-}
-
-.item-actions {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.small {
-    font-size: 12px;
-    color: var(--muted);
-    margin: 2px 0;
-    word-break: break-all;
-}
-
-.platform-info {
-    margin: 0 0 12px;
-}
-
-.link {
-    color: var(--fg);
-    text-decoration: none;
-    border-bottom: 1px solid var(--border);
-}
-
-.inline-form {
-    display: inline-flex;
-    margin: 0;
-}
-
-.tag-form {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: 8px;
-}
-
-.tag-form input {
-    margin: 0;
-    flex: 1;
-    min-width: 140px;
-}
-
-@media (max-width: 640px) {
-    .row {
-        grid-template-columns: 1fr;
-    }
-
-    body.admin {
-        padding: 12px 0;
-    }
-
-    .card {
-        padding: 16px;
-    }
-
-    .item-actions {
-        width: 100%;
-    }
-}
+:root{color-scheme:light dark;--bg:#f5f7fb;--panel:#ffffff;--panel2:#f1f4f8;--input:#ffffff;--text:#151922;--muted:#687386;--line:#dce2ea;--accent:#3478f6;--danger:#d94b5b;--success:#1aa56b;--sidebar:#ffffff}
+@media(prefers-color-scheme:dark){:root{--bg:#0b0d12;--panel:#121722;--panel2:#181e2b;--input:#0e121b;--text:#f4f7fb;--muted:#9099aa;--line:#293143;--accent:#6ea8fe;--danger:#ff6b6b;--success:#48d597;--sidebar:#0e1118}}
+*{box-sizing:border-box}html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}body{min-height:100vh}body.admin{padding:0;display:block}.container{width:100%;max-width:460px;margin:0 auto;padding:24px}.container.wide{max-width:none;padding:0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}h1{font-size:22px;margin:0 0 20px}h2{font-size:15px;margin:0 0 14px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 7px;font-weight:700}.value{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:11px;min-height:44px;display:flex;align-items:center;justify-content:center;word-break:break-all;font-family:ui-monospace,monospace}.status{font-size:13px;color:var(--muted);text-align:center;margin:12px 0}.status.error{color:var(--danger);font-weight:700}.status.ok{color:var(--success);font-weight:700}.actions,.item-actions{display:flex;gap:8px;flex-wrap:wrap}.button,button,input[type="submit"]{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:9px 13px;font-size:13px;font-weight:650;text-decoration:none;cursor:pointer;transition:.15s}.button:hover,button:hover{border-color:var(--accent);transform:translateY(-1px)}.button.primary,button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.button.danger,button.danger{color:var(--danger);background:transparent;border-color:var(--danger)}.input,input[type="text"],input[type="password"],input[type="file"],input[type="number"],select{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 11px;font-size:13px;background:var(--input);color:var(--text);margin:0 0 12px}input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}form{margin:0}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.small{font-size:12px;color:var(--muted);word-break:break-all}.inline-form{display:inline-flex}.tag-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tag-form input{margin:0;flex:1;min-width:130px}.dashboard{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}.sidebar{border-right:1px solid var(--line);background:var(--sidebar);padding:22px 14px;position:sticky;top:0;height:100vh}.brand{padding:8px 12px 24px;font-weight:800;font-size:20px;letter-spacing:.08em}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.14em;margin-top:5px}.nav-label{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.14em;padding:10px 12px}.nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:9px;color:var(--muted);text-decoration:none;font-size:13px;margin:3px 0}.nav-item:hover,.nav-item.active{background:var(--panel2);color:var(--text)}.sidebar-bottom{position:absolute;bottom:20px;left:14px;right:14px}.main{padding:28px;max-width:1450px;width:100%;margin:0 auto}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}.topbar h1{margin:0;font-size:25px}.subtitle{font-size:13px;color:var(--muted);margin-top:5px}.live{display:flex;align-items:center;gap:8px;color:var(--success);font-size:12px;font-weight:700}.dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 12px var(--success)}.stats{display:grid;grid-template-columns:minmax(180px,320px);gap:14px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.stat-value{font-size:28px;font-weight:800;margin-top:8px}.admin-grid{display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1fr);gap:16px;margin-bottom:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.panel-title{font-size:15px;font-weight:800}.panel-desc{font-size:12px;color:var(--muted);margin-top:4px}.accounts-head{display:flex;justify-content:space-between;align-items:center;margin:22px 0 12px}.accounts-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;word-break:break-all}.item-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.item-phone{font-size:16px;font-weight:800}.item-code{font-family:ui-monospace,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin:13px 0}.account-meta{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0 14px}.account-meta .small{background:var(--panel2);border-radius:7px;padding:7px}.switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:13px;margin-top:12px}.switch{position:relative;display:inline-block;width:42px;height:23px}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;inset:0;background:#8b95a7;border-radius:20px;cursor:pointer}.slider:before{content:"";position:absolute;width:17px;height:17px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}.switch input:checked+.slider{background:var(--success)}.switch input:checked+.slider:before{transform:translateX(19px)}@media(max-width:900px){.dashboard{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:12px;display:flex;align-items:center;gap:10px}.brand{padding:5px 10px}.brand small,.nav-label,.sidebar-bottom{display:none}.nav{display:flex;gap:4px;overflow:auto}.nav-item{white-space:nowrap}.main{padding:18px}.stats,.admin-grid{grid-template-columns:1fr}.accounts-list{grid-template-columns:1fr}}.form-panel{max-width:900px}.bulk-panel{margin:18px 0}.bulk-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;margin:12px 0}.bulk-option{display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:var(--panel2);padding:10px;border-radius:9px;font-size:13px}.bulk-option input{width:auto;margin:0}.bulk-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}@media(max-width:640px){.topbar{align-items:flex-start;gap:10px}.row{grid-template-columns:1fr}.account-meta{grid-template-columns:1fr}.item-top{flex-direction:column}.topbar h1{font-size:21px}}
 """
 
 GETCODE_TEMPLATE = ("""<!doctype html>
@@ -393,97 +121,11 @@ __BODY__
 </html>
 """)
 
-ADMIN_TEMPLATE = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin Panel</title>
-<style>__STYLE__</style>
-</head>
-<body class="admin">
-<div class="container wide">
-<div class="card">
-<h1>Admin Panel</h1>
-<h2>Add New Account</h2>
-<form method="post" action="/admin/send_code">
-<div class="row">
-<div>
-<div class="label">Phone</div>
-<input type="text" name="phone" required>
-</div>
-<div>
-<div class="label">API Platform</div>
-<select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select>
-<div class="small platform-info"></div>
-</div>
-</div>
-<div class="row custom-api-fields">
-<div>
-<div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
-</div>
-<div>
-<div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
-</div>
-</div>
-<div class="label">Tag</div>
-<input type="text" name="tag" placeholder="optional">
-<div class="actions">
-<button type="submit">Send Code</button>
-</div>
-</form>
-<h2>Import .session File</h2>
-<form method="post" action="/admin/import_session" enctype="multipart/form-data">
-<div class="label">Session file</div>
-<input type="file" name="session_file" required>
-<div class="row">
-<div>
-<div class="label">Phone optional</div>
-<input type="text" name="phone">
-</div>
-<div>
-<div class="label">2FA password optional</div>
-<input type="password" name="password_2fa">
-</div>
-</div>
-<div class="row">
-<div>
-<div class="label">API Platform</div>
-<select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select>
-<div class="small platform-info"></div>
-</div>
-<div>
-<div class="label">Tag optional</div>
-<input type="text" name="tag">
-</div>
-</div>
-<div class="row custom-api-fields">
-<div>
-<div class="label">API_ID</div>
-<input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID">
-</div>
-<div>
-<div class="label">API_HASH</div>
-<input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH">
-</div>
-</div>
-<div class="actions">
-<button type="submit">Import</button>
-</div>
-</form>
-<h2>Accounts (__COUNT__)</h2>
-__ITEMS__
-<div class="actions">
-<a class="button" href="/admin/logout">Logout</a>
-</div>
-</div>
-</div>
-__SCRIPT__
-</body>
-</html>
-"""
+ADMIN_TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>__TITLE__ · TGAPI</title><style>__STYLE__</style></head><body class="admin"><div class="dashboard"><aside class="sidebar"><div class="brand">TGAPI<small>SESSION CONTROL PANEL</small></div><div class="nav-label">MANAGEMENT</div><nav class="nav"><a class="nav-item __DASH_ACTIVE__" href="/admin">Dashboard</a><a class="nav-item __LOGIN_ACTIVE__" href="/admin/login_new_account">Login New Account</a><a class="nav-item __IMPORT_ACTIVE__" href="/admin/import_session_page">Import Session</a></nav><div class="sidebar-bottom"><a class="nav-item" href="/admin/logout">Logout</a></div></aside><main class="main">__CONTENT__</main></div>__SCRIPT__</body></html>"""
+
+LOGIN_NEW_ACCOUNT_CONTENT = """<div class="topbar"><div><h1>Login New Account</h1><div class="subtitle">Create a local Telethon session using a phone number and verification code.</div></div><div class="live"><span class="dot"></span> Server online</div></div><section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Account Login</div><div class="panel-desc">Choose an API platform, enter a phone number, then verify the Telegram login code.</div></div></div><form method="post" action="/admin/send_code"><div class="row"><div><div class="label">Phone</div><input type="text" name="phone" required></div><div><div class="label">API Platform</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div></div><div class="row custom-api-fields"><div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div><div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div></div><div class="label">Tag</div><input type="text" name="tag" placeholder="optional"><div class="actions"><button class="primary" type="submit">Send Verification Code</button><a class="button" href="/admin">Cancel</a></div></form></section>"""
+
+IMPORT_SESSION_CONTENT = """<div class="topbar"><div><h1>Import Session</h1><div class="subtitle">Import a native Telethon SQLite .session file into TGAPI.</div></div><div class="live"><span class="dot"></span> Server online</div></div><section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Session Import</div><div class="panel-desc">Phone and 2FA metadata are optional. The session itself is validated before import.</div></div></div><form method="post" action="/admin/import_session" enctype="multipart/form-data"><div class="label">Session File</div><input type="file" name="session_file" required><div class="row"><div><div class="label">Phone optional</div><input type="text" name="phone"></div><div><div class="label">2FA password optional</div><input type="password" name="password_2fa"></div></div><div class="row"><div><div class="label">API Platform</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div><div><div class="label">Tag optional</div><input type="text" name="tag"></div></div><div class="row custom-api-fields"><div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div><div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div></div><div class="actions"><button class="primary" type="submit">Import Session</button><a class="button" href="/admin">Cancel</a></div></form></section>"""
 
 COPY_SCRIPT = """<script>
 function copyText(text) {
@@ -1345,7 +987,7 @@ class Handler(BaseHTTPRequestHandler):
                 code_html = "Waiting..."
 
             twofa = str(meta.get("password_2fa", "")) or "None"
-            if meta.get("allow_session_download", False):
+            if meta.get("allow_session_download", True):
                 download_button = '<a class="button" href="/downloadsession/{0}">Download Session</a>'.format(
                     html_escape(account_id, quote=True)
                 )
@@ -1375,7 +1017,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             meta = load_meta(account_id)
-            if meta is None or not meta.get("allow_session_download", False):
+            if meta is None or not meta.get("allow_session_download", True):
                 self._send_html(403, "Session download is disabled.")
                 return
 
@@ -1394,9 +1036,7 @@ class Handler(BaseHTTPRequestHandler):
                 phone = str(meta.get("phone", "") or "").strip()
                 if phone and not phone.startswith("+"):
                     phone = "+" + phone
-                password_2fa = str(meta.get("password_2fa", "") or "").strip() or "None"
-                safe_password_2fa = password_2fa.replace("/", "_").replace("\\", "_").replace('"', "_")
-                download_name = f"{phone}-{safe_password_2fa}-{api_id}-{api_hash}.session"
+                download_name = f"{phone}-{api_id}-{api_hash}.session"
                 self.send_header(
                     "Content-Disposition",
                     f'attachment; filename="{download_name}"'
@@ -1421,93 +1061,35 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-        if path == "/admin":
+        if path in ("/admin", "/admin/login_new_account", "/admin/import_session_page"):
             if not self._admin_logged_in():
                 self._redirect("/admin/login")
                 return
-
-            base_url = self._get_base_url()
-            accounts = list_accounts()
             settings = load_settings()
-
             platform_options = platform_options_html(settings.get("platform", "desktop"))
             safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True) if settings.get("platform") == "custom" else ""
             safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True) if settings.get("platform") == "custom" else ""
-
-            platform_data = {}
-
-            for key, value in PLATFORM_API.items():
-                if value is None:
-                    platform_data[key] = None
-                else:
-                    platform_data[key] = [value[0], value[1]]
-
-            platform_data_json = json.dumps(platform_data)
-            platform_script = PLATFORM_SCRIPT.replace("__PLATFORM_DATA__", platform_data_json)
-            scripts = COPY_SCRIPT + platform_script
-
-            items = ""
-
+            platform_data = {key: (None if value is None else [value[0], value[1]]) for key, value in PLATFORM_API.items()}
+            scripts = COPY_SCRIPT + PLATFORM_SCRIPT.replace("__PLATFORM_DATA__", json.dumps(platform_data))
+            if path == "/admin/login_new_account":
+                html = ADMIN_TEMPLATE.replace("__TITLE__", "Login New Account").replace("__DASH_ACTIVE__", "").replace("__LOGIN_ACTIVE__", "active").replace("__IMPORT_ACTIVE__", "").replace("__CONTENT__", LOGIN_NEW_ACCOUNT_CONTENT).replace("__SCRIPT__", scripts).replace("__PLATFORM_OPTIONS__", platform_options).replace("__API_ID_VALUE__", safe_api_id).replace("__API_HASH_VALUE__", safe_api_hash).replace("__STYLE__", COMMON_STYLE)
+                self._send_html(200, html); return
+            if path == "/admin/import_session_page":
+                html = ADMIN_TEMPLATE.replace("__TITLE__", "Import Session").replace("__DASH_ACTIVE__", "").replace("__LOGIN_ACTIVE__", "").replace("__IMPORT_ACTIVE__", "active").replace("__CONTENT__", IMPORT_SESSION_CONTENT).replace("__SCRIPT__", scripts).replace("__PLATFORM_OPTIONS__", platform_options).replace("__API_ID_VALUE__", safe_api_id).replace("__API_HASH_VALUE__", safe_api_hash).replace("__STYLE__", COMMON_STYLE)
+                self._send_html(200, html); return
+            base_url = self._get_base_url(); accounts = list_accounts(); items = ""; bulk_options = ""
             for meta in accounts:
-                account_id = str(meta.get("id", ""))
-                phone = str(meta.get("phone", ""))
-                code = str(meta.get("latest_code", ""))
-                tag = str(meta.get("tag", ""))
-                login_api = platform_display(meta)
-
+                account_id = str(meta.get("id", "")); phone = str(meta.get("phone", "")); code = str(meta.get("latest_code", "")); tag = str(meta.get("tag", "")); login_api = platform_display(meta)
                 copy_value = f"+{phone}--{base_url}/getcode/{account_id}" if phone else f"{base_url}/getcode/{account_id}"
-
-                safe_id = html_escape(account_id, quote=True)
-                safe_phone = html_escape(phone or account_id)
-                safe_code = html_escape(code or "None")
-                safe_copy = html_escape(copy_value, quote=True)
-                safe_tag = html_escape(tag, quote=True)
-                safe_tag_display = html_escape(tag or "-")
-                safe_login_api = html_escape(login_api or "-")
-                session_download_checked = " checked" if meta.get("allow_session_download", False) else ""
-
-                items += f'''
-<div class="item">
-<div class="item-top">
-<div class="item-phone">{safe_phone}</div>
-<div class="item-actions">
-<button type="button" data-copy="{safe_copy}" onclick="copyText(this.dataset.copy)">Copy</button>
-<a class="button" href="/getcode/{safe_id}">Go</a>
-<form class="inline-form" method="post" action="/admin/delete/{safe_id}" onsubmit="return confirm('Delete this account?');">
-<button type="submit">Delete</button>
-</form>
-</div>
-</div>
-<div class="item-code">Code: {safe_code}</div>
-<div class="small">ID: {safe_id}</div>
-<div class="small">Tag: {safe_tag_display}</div>
-<div class="small">Login API: {safe_login_api}</div>
-<form class="tag-form" method="post" action="/admin/session_download/{safe_id}">
-<label style="display:flex;align-items:center;gap:10px;">
-<input type="checkbox" name="enabled" value="1"{session_download_checked} onchange="this.form.submit()">
-<span>Session download</span>
-</label>
-</form>
-<form class="tag-form" method="post" action="/admin/tag/{safe_id}">
-<input type="text" name="tag" value="{safe_tag}" placeholder="Tag">
-<button type="submit">Save Tag</button>
-</form>
-</div>
-'''
-
-            html = (
-                ADMIN_TEMPLATE
-                .replace("__STYLE__", COMMON_STYLE)
-                .replace("__COUNT__", str(len(accounts)))
-                .replace("__ITEMS__", items or "<p>No accounts.</p>")
-                .replace("__SCRIPT__", scripts)
-                .replace("__PLATFORM_OPTIONS__", platform_options)
-                .replace("__API_ID_VALUE__", safe_api_id)
-                .replace("__API_HASH_VALUE__", safe_api_hash)
-            )
-
-            self._send_html(200, html)
-            return
+                safe_id = html_escape(account_id, quote=True); safe_phone = html_escape(phone or account_id); safe_code = html_escape(code or "None"); safe_copy = html_escape(copy_value, quote=True); safe_tag = html_escape(tag, quote=True); safe_tag_display = html_escape(tag or "-"); safe_login_api = html_escape(login_api or "-")
+                checked = " checked" if meta.get("allow_session_download", True) else ""
+                bulk_options += f'<label class="bulk-option"><input type="checkbox" name="account_ids" value="{safe_id}"><span>{safe_phone}</span></label>'
+                items += f'<div class="item"><div class="item-top"><div><div class="item-phone">{safe_phone}</div><div class="small">{safe_login_api}</div></div><div class="item-actions"><button type="button" data-copy="{safe_copy}" onclick="copyText(this.dataset.copy)">Copy</button><a class="button" href="/getcode/{safe_id}">Open</a><form class="inline-form" method="post" action="/admin/delete/{safe_id}" onsubmit="return confirm(\'Delete this account and its local session files?\');"><button class="danger" type="submit">Delete</button></form></div></div><div class="item-code">Latest code: {safe_code}</div><div class="account-meta"><div class="small">Tag: {safe_tag_display}</div><div class="small">ID: {safe_id}</div></div><form class="switch-row" method="post" action="/admin/session_download/{safe_id}"><div><div style="font-size:13px;font-weight:700">Session download</div><div class="small">Allow download from the receive-code page</div></div><label class="switch"><input type="checkbox" name="enabled" value="1"{checked} onchange="this.form.submit()"><span class="slider"></span></label></form><form class="tag-form" method="post" action="/admin/tag/{safe_id}"><input type="text" name="tag" value="{safe_tag}" placeholder="Tag"><button type="submit">Save Tag</button></form></div>'
+            bulk_body = bulk_options or '<div class="small">No accounts available.</div>'
+            account_body = items or '<div class="panel"><div class="small">No accounts yet.</div></div>'
+            content = f'<div class="topbar"><div><h1>Dashboard</h1><div class="subtitle">Telegram account and session management</div></div><div class="live"><span class="dot"></span> Server online</div></div><div class="stats"><div class="stat"><div class="label">Total accounts</div><div class="stat-value">{len(accounts)}</div></div></div><section class="panel bulk-panel"><div class="panel-head"><div><div class="panel-title">Multi-account Session Download</div><div class="panel-desc">Select multiple accounts and change their session-download permission at once.</div></div></div><form method="post" action="/admin/bulk_session_download"><div class="bulk-list">{bulk_body}</div><div class="bulk-actions"><button class="primary" type="submit" name="action" value="enable">Enable Selected</button><button type="submit" name="action" value="disable">Disable Selected</button></div></form></section><div class="accounts-head"><div><div class="panel-title">Accounts</div><div class="panel-desc">Manage existing Telegram sessions.</div></div><a class="button primary" href="/admin/login_new_account">Login New Account</a></div><div class="accounts-list">{account_body}</div>'
+            html = ADMIN_TEMPLATE.replace("__TITLE__", "Dashboard").replace("__DASH_ACTIVE__", "active").replace("__LOGIN_ACTIVE__", "").replace("__IMPORT_ACTIVE__", "").replace("__CONTENT__", content).replace("__SCRIPT__", scripts).replace("__STYLE__", COMMON_STYLE)
+            self._send_html(200, html); return
 
         self._redirect("/admin")
 
@@ -1804,37 +1386,12 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            uploaded_filename = str(files["session_file"].get("filename", "") or "").strip()
-
-            # Supported filename format:
-            # +123456789-2FA-API_ID-API_HASH.session
-            # Parse API_HASH, API_ID, 2FA and phone from the right so 2FA may contain "-".
-            parsed_phone = ""
-            parsed_pwd = ""
-            parsed_api_id = ""
-            parsed_api_hash = ""
-            filename_stem = os.path.basename(uploaded_filename)
-            if filename_stem.lower().endswith(".session"):
-                filename_stem = filename_stem[:-8]
-            parts = filename_stem.rsplit("-", 3)
-            if len(parts) == 4:
-                parsed_phone, parsed_pwd, parsed_api_id, parsed_api_hash = parts
-                parsed_phone = parsed_phone.strip()
-                parsed_pwd = parsed_pwd.strip()
-                parsed_api_id = parsed_api_id.strip()
-                parsed_api_hash = parsed_api_hash.strip()
-                if parsed_phone.startswith("+"):
-                    parsed_phone = parsed_phone[1:]
-                if parsed_pwd.lower() in ("none", "null", "-"):
-                    parsed_pwd = ""
-
-            # Explicit form values always take priority over filename values.
-            phone_input = get_first(data, "phone", "").strip() or parsed_phone
-            pwd_input = get_first(data, "password_2fa", "") or parsed_pwd
+            phone_input = get_first(data, "phone", "").strip()
+            pwd_input = get_first(data, "password_2fa", "")
             tag_input = get_first(data, "tag", "").strip()
             platform_raw = get_first(data, "platform", "")
-            api_id_raw = get_first(data, "api_id", "").strip() or parsed_api_id
-            api_hash_raw = get_first(data, "api_hash", "").strip() or parsed_api_hash
+            api_id_raw = get_first(data, "api_id", "")
+            api_hash_raw = get_first(data, "api_hash", "")
 
             api_id, api_hash, platform, error = parse_credentials_with_platform(
                 platform_raw,
@@ -1956,6 +1513,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send_html(200, html)
             return
 
+        if path == "/admin/bulk_session_download":
+            account_ids = data.get("account_ids", [])
+            if not isinstance(account_ids, list): account_ids = [account_ids]
+            action = get_first(data, "action", ""); enabled = action == "enable"
+            if action in ("enable", "disable"):
+                for account_id in account_ids:
+                    account_id = str(account_id).strip()
+                    if is_safe_account_id(account_id) and os.path.exists(session_path(account_id)):
+                        update_meta(account_id, allow_session_download=enabled)
+            self._redirect("/admin"); return
+
         if path.startswith("/admin/session_download/"):
             account_id = path.split("/admin/session_download/", 1)[-1].strip("/")
 
@@ -1995,13 +1563,10 @@ class Handler(BaseHTTPRequestHandler):
             client = clients.pop(account_id, None)
 
             if client:
-                # Do not wait for disconnect here. Waiting inside the HTTP request
-                # can cause reverse proxies to return 502/504 during deletion.
+                future = asyncio.run_coroutine_threadsafe(client.disconnect(), main_loop)
+
                 try:
-                    asyncio.run_coroutine_threadsafe(
-                        client.disconnect(),
-                        main_loop
-                    )
+                    future.result(timeout=5)
                 except Exception:
                     pass
 
