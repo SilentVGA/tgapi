@@ -67,7 +67,7 @@ Session 下载默认开启。
 下载文件名格式：
 
 ```text
-+123456789-2FA-API_ID-API_HASH.session
++123456789-2FA-API_ID-API_HASH-Tag.session
 ```
 
 上传 `.session` 文件时，系统会自动尝试从文件名识别：
@@ -76,6 +76,7 @@ Session 下载默认开启。
 - 2FA
 - API_ID
 - API_HASH
+- 自定义标签
 
 系统从右侧识别 API_ID 和 API_HASH，因此 2FA 中包含 `-` 时也可以正常解析。
 
