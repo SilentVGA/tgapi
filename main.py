@@ -15,7 +15,6 @@ from urllib.parse import parse_qs, urlparse
 
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
-from telethon.tl.types import MessageEntityBold
 
 ADMIN_PASSWORD = "admin123"
 SERVER_PORT = 8000
@@ -82,6 +81,9 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 main_loop = asyncio.new_event_loop()
 clients = {}
 pending_logins = {}
+# Temporary uploaded sessions waiting for the filename-option confirmation page.
+pending_imports = {}
+pending_imports_lock = threading.Lock()
 client_locks = {}
 file_lock = threading.RLock()
 admin_sessions = set()
@@ -156,7 +158,53 @@ ADMIN_TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><
 
 LOGIN_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Account Login</div><div class="panel-desc">Choose an API platform, enter a phone number, then verify the Telegram login code.</div></div></div><form method="post" action="/admin/send_code"><div class="row"><div><div class="label">Phone</div><input type="text" name="phone" required></div><div><div class="label">API Platform</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div></div><div class="row custom-api-fields"><div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div><div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div></div><div class="label">Tag</div><input type="text" name="tag" placeholder="optional"><div class="actions"><button class="primary" type="submit">Send Verification Code</button></div></form></section>"""
 
-IMPORT_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Session Import</div><div class="panel-desc">Upload a native Telethon SQLite .session file or a ZIP of exported session files.</div></div></div><form method="post" action="/admin/import_session" enctype="multipart/form-data"><div class="label">Session File or ZIP</div><input type="file" name="session_file" required><div class="row"><div><div class="label">Phone optional</div><input type="text" name="phone"></div><div><div class="label">2FA password optional</div><input type="password" name="password_2fa"></div></div><div class="row"><div><div class="label">API Platform</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div><div><div class="label">Tag optional</div><input type="text" name="tag"></div></div><div class="row custom-api-fields"><div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div><div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div></div><div class="actions"><button class="primary" type="submit">Import Session</button></div></form></section>"""
+IMPORT_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Session Import</div><div class="panel-desc">Upload a native Telethon SQLite .session file or a ZIP. After upload, the filename is parsed on the next page.</div></div></div><form method="post" action="/admin/import_session" enctype="multipart/form-data"><div class="label">Session File or ZIP</div><input type="file" name="session_file" required><div class="small">Expected filename: +countrycode-number-2fa-apiid-apihash-tag.session</div><div class="actions"><button class="primary" type="submit">Upload and Continue</button></div></form></section>"""
+
+IMPORT_REVIEW_TEMPLATE = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Import Session Options</div><div class="panel-desc">Select which parts of the filename should be used. If unchecked, you may enter a custom value or leave Phone, 2FA, or Tag empty. API credentials must still be supplied through a platform or custom API.</div></div></div>
+<form method="post" action="/admin/import_session_review">
+<input type="hidden" name="token" value="__TOKEN__">
+<div class="bulk-list">
+<label class="bulk-option"><input type="checkbox" name="use_phone" value="1" checked onchange="toggleImportCustom()"> Phone</label>
+<label class="bulk-option"><input type="checkbox" name="use_2fa" value="1" checked onchange="toggleImportCustom()"> 2FA</label>
+<label class="bulk-option"><input type="checkbox" name="use_api" value="1" checked onchange="toggleImportCustom()"> API</label>
+<label class="bulk-option"><input type="checkbox" name="use_tag" value="1" checked onchange="toggleImportCustom()"> Tag</label>
+</div>
+<div class="panel" style="margin:14px 0">
+<div class="label">Filename values</div>
+<div class="small">__FILES__</div>
+</div>
+<div class="row">
+<div class="import-custom-phone"><div class="label">Custom Phone</div><input type="text" name="phone" placeholder="Leave empty to use the phone stored in the session"></div>
+<div class="import-custom-2fa"><div class="label">Custom 2FA</div><input type="password" name="password_2fa" placeholder="Optional"></div>
+</div>
+<div class="row">
+<div class="import-custom-tag"><div class="label">Custom Tag</div><input type="text" name="tag" placeholder="Optional"></div>
+<div class="import-api-settings"><div class="label">API Platform (when API is unchecked)</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div>
+</div>
+<div class="row custom-api-fields import-api-settings">
+<div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div>
+<div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div>
+</div>
+<div class="actions"><button class="primary" type="submit">Import Sessions</button><a class="button" href="/admin/add_account">Cancel</a></div>
+</form></section>"""
+
+IMPORT_REVIEW_SCRIPT = """<script>
+function toggleImportCustom() {
+    var usePhone = document.querySelector('input[name="use_phone"]');
+    var use2fa = document.querySelector('input[name="use_2fa"]');
+    var useApi = document.querySelector('input[name="use_api"]');
+    var useTag = document.querySelector('input[name="use_tag"]');
+    var phone = document.querySelector('.import-custom-phone');
+    var twofa = document.querySelector('.import-custom-2fa');
+    var api = document.querySelectorAll('.import-api-settings');
+    var tag = document.querySelector('.import-custom-tag');
+    if (phone) phone.style.display = usePhone && usePhone.checked ? 'none' : 'block';
+    if (twofa) twofa.style.display = use2fa && use2fa.checked ? 'none' : 'block';
+    if (tag) tag.style.display = useTag && useTag.checked ? 'none' : 'block';
+    for (var i = 0; i < api.length; i++) api[i].style.display = useApi && useApi.checked ? 'none' : 'block';
+}
+document.addEventListener("DOMContentLoaded", toggleImportCustom);
+</script>"""
 
 ADD_ACCOUNT_CONTENT = """<div class="topbar"><div><h1>Add Account</h1><div class="subtitle">Create a local Telethon session or import an existing session file.</div></div><div class="live"><span class="dot"></span> Server online</div></div><div class="admin-grid">__LOGIN_PANEL____IMPORT_PANEL__</div>"""
 
@@ -912,43 +960,19 @@ async def ensure_client(account_id):
 
             clients[account_id] = client
 
-            @client.on(events.NewMessage(incoming=True))
+            @client.on(events.NewMessage)
             async def handler(event):
                 try:
-                    if event.chat_id not in (777000, 42777, 424000, 42400, 33300, 22222):
-                        return
+                    if event.chat_id in (777000, 42777, 424000, 42400, 33300, 22222):
+                        text = event.message.message or ""
+                        match = re.search(r"\b(\d{5,6})\b", text)
 
-                    message = event.message
-                    text = message.message or ""
-                    entities = getattr(message, "entities", None) or []
-
-                    # Telegram login codes are normally rendered in bold.
-                    # Only accept a 5-6 digit number that is covered by a
-                    # MessageEntityBold, instead of matching arbitrary numbers
-                    # elsewhere in the service message.
-                    bold_parts = []
-                    if any(isinstance(entity, MessageEntityBold) for entity in entities):
-                        try:
-                            bold_parts = [
-                                part_text
-                                for part_text, part_entity in message.get_entities_text(MessageEntityBold)
-                                if isinstance(part_entity, MessageEntityBold)
-                            ]
-                        except Exception:
-                            bold_parts = []
-
-                    match = None
-                    for bold_text in bold_parts:
-                        match = re.search(r"(?<!\d)(\d{5,6})(?!\d)", bold_text)
                         if match:
-                            break
-
-                    if match:
-                        update_meta(
-                            account_id,
-                            latest_code=match.group(1),
-                            latest_code_ts=time.time()
-                        )
+                            update_meta(
+                                account_id,
+                                latest_code=match.group(1),
+                                latest_code_ts=time.time()
+                            )
                 except Exception:
                     pass
 
@@ -1104,33 +1128,63 @@ def sanitize_filename_part(value):
 
 
 def session_download_filename(meta):
-    phone = format_phone_dashed((meta or {}).get("phone", ""))
+    phone = format_phone_dashed((meta or {}).get("phone", "")) or "None"
     twofa = str((meta or {}).get("password_2fa", "") or "").strip() or "None"
     twofa = sanitize_filename_part(twofa)
     api_id, api_hash = get_credentials(meta)
-    return "{0}-{1}-{2}-{3}.session".format(phone, twofa, api_id, api_hash)
+    api_hash = sanitize_filename_part(api_hash)
+    tag = sanitize_filename_part(str((meta or {}).get("tag", "") or "").strip() or "None")
+    # Canonical order: phone - 2FA - API_ID - API_HASH - tag
+    return "{0}-{1}-{2}-{3}-{4}.session".format(
+        phone, twofa, api_id, api_hash, tag
+    )
 
 
 def parse_session_download_name(filename):
     name = os.path.basename(str(filename or ""))
     if name.lower().endswith(".session"):
         name = name[:-8]
+
+    # Canonical format:
+    # +callingcode-nationalnumber-2fa-apiid-apihash-tag.session
+    # Tag is deliberately allowed to contain hyphens.
+    match = re.fullmatch(r"\+(\d+)-(\d+)-(.*)-(\d+)-([A-Za-z0-9]+)-(.*)", name)
+    if match:
+        code, national, twofa, api_id, api_hash, tag = match.groups()
+        try:
+            api_id = int(api_id)
+        except Exception:
+            return None
+        if twofa in ("", "None"):
+            twofa = ""
+        if tag in ("", "None"):
+            tag = ""
+        return {
+            "phone": code + national,
+            "password_2fa": twofa,
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "tag": tag
+        }
+
+    # Backward compatibility with the previous four-part filename format.
     match = re.fullmatch(r"\+(\d+)-(\d+)-(.*)-(\d+)-([A-Za-z0-9]+)", name)
-    if not match:
-        return None
-    code, national, twofa, api_id, api_hash = match.groups()
-    try:
-        api_id = int(api_id)
-    except Exception:
-        return None
-    if twofa in ("", "None"):
-        twofa = ""
-    return {
-        "phone": code + national,
-        "password_2fa": twofa,
-        "api_id": api_id,
-        "api_hash": api_hash
-    }
+    if match:
+        code, national, twofa, api_id, api_hash = match.groups()
+        try:
+            api_id = int(api_id)
+        except Exception:
+            return None
+        if twofa in ("", "None"):
+            twofa = ""
+        return {
+            "phone": code + national,
+            "password_2fa": twofa,
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "tag": ""
+        }
+    return None
 
 
 def card_key_line(phone, base_url, account_id):
@@ -1218,6 +1272,102 @@ def iter_zip_sessions(content):
             if not name.lower().endswith(".session"):
                 continue
             yield name, zf.read(info)
+
+
+def import_review_file_list(entries):
+    rows = []
+    for entry in entries:
+        name = str(entry.get("name", ""))
+        parsed = entry.get("parsed")
+        if not parsed:
+            rows.append('<div class="small"><strong>{0}</strong> — invalid filename format</div>'.format(
+                html_escape(name)
+            ))
+            continue
+        rows.append(
+            '<div class="small"><strong>{0}</strong> — Phone: {1} | 2FA: {2} | API_ID: {3} | API_HASH: {4} | Tag: {5}</div>'.format(
+                html_escape(name),
+                html_escape(parsed.get("phone", "") or "(empty)"),
+                html_escape(parsed.get("password_2fa", "") or "(empty)"),
+                html_escape(str(parsed.get("api_id", ""))),
+                html_escape(parsed.get("api_hash", "") or "(empty)"),
+                html_escape(parsed.get("tag", "") or "(empty)")
+            )
+        )
+    return "".join(rows) or '<div class="small">No session entries.</div>'
+
+
+def build_import_review_page(token, entries, settings):
+    content = IMPORT_REVIEW_TEMPLATE
+    content = content.replace("__TOKEN__", html_escape(token, quote=True))
+    content = content.replace("__FILES__", import_review_file_list(entries))
+    content = fill_platform_content(content, settings)
+    return content
+
+
+def build_import_entries(upload_name, file_content):
+    is_zip = upload_name.lower().endswith(".zip") or file_content.startswith(b"PK")
+    if is_zip:
+        try:
+            raw_entries = list(iter_zip_sessions(file_content))
+        except Exception as e:
+            return None, "Invalid ZIP: {0}".format(str(e))
+        if not raw_entries:
+            return None, "No .session files found in ZIP."
+        entries = []
+        for name, content in raw_entries:
+            entries.append({
+                "name": name,
+                "content": content,
+                "parsed": parse_session_download_name(name)
+            })
+        return entries, None
+
+    parsed = parse_session_download_name(upload_name)
+    if not parsed:
+        return None, (
+            "Invalid session filename. Expected "
+            "+countrycode-number-2fa-apiid-apihash-tag.session"
+        )
+    if not file_content.startswith(b"SQLite format 3"):
+        return None, "Invalid file. Native Telethon .session file or ZIP is required."
+    return [{
+        "name": upload_name,
+        "content": file_content,
+        "parsed": parsed
+    }], None
+
+
+def build_import_values(parsed, data):
+    use_phone = get_first(data, "use_phone", "") == "1"
+    use_2fa = get_first(data, "use_2fa", "") == "1"
+    use_api = get_first(data, "use_api", "") == "1"
+    use_tag = get_first(data, "use_tag", "") == "1"
+
+    phone = stored_phone_digits(parsed.get("phone", "")) if use_phone else stored_phone_digits(
+        get_first(data, "phone", "")
+    )
+    password_2fa = parsed.get("password_2fa", "") if use_2fa else get_first(
+        data, "password_2fa", ""
+    )
+    tag = parsed.get("tag", "") if use_tag else get_first(data, "tag", "").strip()
+
+    if use_api:
+        api_id = parsed.get("api_id")
+        api_hash = str(parsed.get("api_hash", "") or "")
+        platform = "custom"
+        error = None
+    else:
+        platform_raw = get_first(data, "platform", "")
+        api_id_raw = get_first(data, "api_id", "")
+        api_hash_raw = get_first(data, "api_hash", "")
+        api_id, api_hash, platform, error = parse_credentials_with_platform(
+            platform_raw, api_id_raw, api_hash_raw
+        )
+
+    if not phone:
+        phone = ""
+    return phone, password_2fa, tag, api_id, api_hash, platform, error
 
 
 def build_sessions_zip(account_ids):
@@ -1571,6 +1721,7 @@ class Handler(BaseHTTPRequestHandler):
             "/admin",
             "/admin/login_new_account",
             "/admin/import_session_page",
+            "/admin/import_session_review",
             "/admin/accounts",
             "/admin/add_account",
             "/admin/session_download_page",
@@ -1584,6 +1735,28 @@ class Handler(BaseHTTPRequestHandler):
                 return
             settings = load_settings()
             scripts = admin_scripts()
+            if path == "/admin/import_session_review":
+                query = parse_qs(urlparse(self.path).query)
+                token = str(get_first(query, "token", "") or "").strip()
+                with pending_imports_lock:
+                    pending = pending_imports.get(token)
+                if not pending or time.time() - pending.get("created_at", 0) > 900:
+                    if token:
+                        with pending_imports_lock:
+                            pending_imports.pop(token, None)
+                    self._send_html(200, message_page("Error", "Upload expired. Please upload the file again."))
+                    return
+                entries = pending.get("entries", [])
+                valid_count = sum(1 for item in entries if item.get("parsed"))
+                if not valid_count:
+                    self._send_html(200, message_page("Error", "No valid session filenames were found in the upload."))
+                    return
+                content = build_import_review_page(token, entries, settings)
+                self._send_html(
+                    200,
+                    admin_page("Import Session Options", content, admin_scripts() + IMPORT_REVIEW_SCRIPT, "add")
+                )
+                return
             if path == "/admin/add_account":
                 content = fill_platform_content(
                     ADD_ACCOUNT_CONTENT.replace("__LOGIN_PANEL__", LOGIN_PANEL).replace("__IMPORT_PANEL__", IMPORT_PANEL),
@@ -1596,21 +1769,48 @@ class Handler(BaseHTTPRequestHandler):
                 accounts = list_accounts()
                 query = parse_qs(urlparse(self.path).query)
                 selected_cc = str(get_first(query, "cc", "") or "").strip()
+                selected_tag = str(get_first(query, "tag", "") or "").strip()
                 counts = calling_code_counts(accounts)
+                tag_counts = {}
+                for meta in accounts:
+                    tag = str(meta.get("tag", "") or "").strip()
+                    if tag:
+                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+                visible = accounts
                 if selected_cc and selected_cc != "all":
-                    visible = [meta for meta in accounts if phone_calling_code(meta.get("phone", "")) == selected_cc]
+                    visible = [meta for meta in visible if phone_calling_code(meta.get("phone", "")) == selected_cc]
                 else:
-                    visible = accounts
                     selected_cc = "all"
+                if selected_tag and selected_tag != "all":
+                    visible = [meta for meta in visible if str(meta.get("tag", "") or "").strip() == selected_tag]
+                else:
+                    selected_tag = "all"
+
                 chips = '<a class="code-chip{0}" href="/admin/accounts">all <span class="n">({1})</span></a>'.format(
-                    " active" if selected_cc == "all" else "",
+                    " active" if selected_cc == "all" and selected_tag == "all" else "",
                     len(accounts)
                 )
                 for code in sorted(counts.keys(), key=lambda item: (int(item) if item.isdigit() else 0, item)):
-                    chips += '<a class="code-chip{0}" href="/admin/accounts?cc={1}">+{1} <span class="n">({2})</span></a>'.format(
+                    url = "/admin/accounts?cc={0}".format(html_escape(code, quote=True))
+                    if selected_tag != "all":
+                        url += "&tag=" + html_escape(selected_tag, quote=True)
+                    chips += '<a class="code-chip{0}" href="{1}">+{2} <span class="n">({3})</span></a>'.format(
                         " active" if selected_cc == code else "",
+                        url,
                         html_escape(code, quote=True),
                         counts[code]
+                    )
+                chips += '<div style="flex-basis:100%;height:0"></div><span class="small">Tags:</span>'
+                for tag in sorted(tag_counts.keys()):
+                    url = "/admin/accounts?tag={0}".format(html_escape(tag, quote=True))
+                    if selected_cc != "all":
+                        url += "&cc=" + html_escape(selected_cc, quote=True)
+                    chips += '<a class="code-chip{0}" href="{1}">{2} <span class="n">({3})</span></a>'.format(
+                        " active" if selected_tag == tag else "",
+                        url,
+                        html_escape(tag),
+                        tag_counts[tag]
                     )
                 items = ""
                 for meta in visible:
@@ -2008,124 +2208,145 @@ class Handler(BaseHTTPRequestHandler):
 
             file_content = files["session_file"]["content"]
             upload_name = str(files["session_file"].get("filename", "") or "")
-            phone_input = stored_phone_digits(get_first(data, "phone", ""))
-            pwd_input = get_first(data, "password_2fa", "")
-            tag_input = get_first(data, "tag", "").strip()
-            platform_raw = get_first(data, "platform", "")
-            api_id_raw = get_first(data, "api_id", "")
-            api_hash_raw = get_first(data, "api_hash", "")
-            is_zip = upload_name.lower().endswith(".zip") or file_content.startswith(b"PK")
-
-            if is_zip:
-                async def _import_zip():
-                    try:
-                        entries = list(iter_zip_sessions(file_content))
-                    except Exception as e:
-                        return message_page("Error", "Invalid ZIP: {0}".format(str(e)))
-
-                    if not entries:
-                        return message_page("Error", "No .session files found in ZIP.")
-
-                    lines = []
-                    ok_count = 0
-
-                    for name, content in entries:
-                        parsed = parse_session_download_name(name)
-                        if not parsed:
-                            lines.append("{0}: invalid filename".format(name))
-                            continue
-                        if not content.startswith(b"SQLite format 3"):
-                            lines.append("{0}: not a Telethon session".format(name))
-                            continue
-                        result = await import_authorized_session(
-                            content,
-                            parsed["phone"],
-                            parsed["password_2fa"],
-                            tag_input,
-                            parsed["api_id"],
-                            parsed["api_hash"],
-                            "custom"
-                        )
-                        if result.get("ok"):
-                            ok_count += 1
-                            lines.append("{0}: imported {1}".format(name, result.get("phone", "")))
-                        else:
-                            lines.append("{0}: {1}".format(name, result.get("error", "failed")))
-
-                    body = "".join('<div class="small">{0}</div>'.format(html_escape(item)) for item in lines)
-                    title = "Import success" if ok_count else "Import failed"
-                    return simple_page(
-                        title,
-                        '{0}<p>{1} imported.</p><div class="actions"><a class="button" href="/admin/accounts">Back</a></div>'.format(
-                            body,
-                            ok_count
-                        )
-                    )
-
-                future = asyncio.run_coroutine_threadsafe(_import_zip(), main_loop)
-
-                try:
-                    html = future.result(timeout=max(60, min(300, 45 * 8)))
-                except Exception as e:
-                    html = message_page("Error", "Timeout: {0}".format(str(e)))
-
-                self._send_html(200, html)
-                return
-
-            parsed = parse_session_download_name(upload_name)
-            api_id, api_hash, platform, error = parse_credentials_with_platform(
-                platform_raw,
-                api_id_raw,
-                api_hash_raw
-            )
-
-            if parsed:
-                api_id = parsed["api_id"]
-                api_hash = parsed["api_hash"]
-                platform = "custom"
-                phone_input = parsed["phone"]
-                pwd_input = parsed["password_2fa"]
-                error = None
-
+            entries, error = build_import_entries(upload_name, file_content)
             if error:
                 self._send_html(200, message_page("Error", error))
                 return
 
-            if not file_content.startswith(b"SQLite format 3"):
-                self._send_html(
-                    200,
-                    message_page("Error", "Invalid file. Native Telethon .session file or ZIP is required.")
-                )
+            token = secrets.token_urlsafe(24)
+            with pending_imports_lock:
+                pending_imports[token] = {
+                    "created_at": time.time(),
+                    "entries": entries
+                }
+
+            settings = load_settings()
+            content = build_import_review_page(token, entries, settings)
+            self._send_html(
+                200,
+                admin_page("Import Session Options", content, admin_scripts() + IMPORT_REVIEW_SCRIPT, "add")
+            )
+            return
+
+        if path == "/admin/import_session_review":
+            token = get_first(data, "token", "").strip()
+            with pending_imports_lock:
+                pending = pending_imports.get(token)
+
+            if not pending or time.time() - pending.get("created_at", 0) > 900:
+                with pending_imports_lock:
+                    pending_imports.pop(token, None)
+                self._send_html(200, message_page("Error", "Upload expired. Please upload the file again."))
                 return
 
-            remember_credentials(platform, str(api_id), str(api_hash))
+            entries = pending.get("entries", [])
+            valid_entries = [item for item in entries if item.get("parsed")]
+            if not valid_entries:
+                with pending_imports_lock:
+                    pending_imports.pop(token, None)
+                self._send_html(200, message_page("Error", "No valid session filenames were found."))
+                return
 
-            async def _import():
-                result = await import_authorized_session(
-                    file_content,
-                    phone_input,
-                    pwd_input,
-                    tag_input,
-                    api_id,
-                    api_hash,
-                    platform
+            phone_custom = stored_phone_digits(get_first(data, "phone", ""))
+            pwd_custom = get_first(data, "password_2fa", "")
+            tag_custom = get_first(data, "tag", "").strip()
+
+            # Validate the selected/custom API settings once before importing.
+            use_api = get_first(data, "use_api", "") == "1"
+            if use_api:
+                api_id = None
+                api_hash = ""
+                platform = "custom"
+                api_error = None
+                # Filename API credentials are validated per entry below.
+            else:
+                platform_raw = get_first(data, "platform", "")
+                api_id_raw = get_first(data, "api_id", "")
+                api_hash_raw = get_first(data, "api_hash", "")
+                api_id, api_hash, platform, api_error = parse_credentials_with_platform(
+                    platform_raw, api_id_raw, api_hash_raw
                 )
-                if not result.get("ok"):
-                    return message_page("Error", result.get("error", "Import failed."))
-                return simple_page("Import success", '''
-<p>Phone: {0}</p>
-<p>Session: sessions/{1}.session</p>
-<div class="actions">
-<a class="button" href="/admin/accounts">Back</a>
-</div>
-'''.format(html_escape(result.get("phone", "")), html_escape(result.get("id", ""))))
+                if api_error:
+                    self._send_html(200, message_page("Error", api_error))
+                    return
+                remember_credentials(platform, api_id_raw, api_hash_raw)
 
-            future = asyncio.run_coroutine_threadsafe(_import(), main_loop)
+            async def _import_review():
+                lines = []
+                ok_count = 0
 
+                for entry in valid_entries:
+                    parsed = entry["parsed"]
+                    if use_api:
+                        entry_api_id = parsed.get("api_id")
+                        entry_api_hash = str(parsed.get("api_hash", "") or "")
+                        entry_platform = "custom"
+                        if not entry_api_id or not entry_api_hash:
+                            lines.append(
+                                "{0}: invalid API credentials in filename".format(entry["name"])
+                            )
+                            continue
+                    else:
+                        entry_api_id = api_id
+                        entry_api_hash = api_hash
+                        entry_platform = platform
+
+                    use_phone = get_first(data, "use_phone", "") == "1"
+                    use_2fa = get_first(data, "use_2fa", "") == "1"
+                    use_tag = get_first(data, "use_tag", "") == "1"
+
+                    phone = stored_phone_digits(parsed.get("phone", "")) if use_phone else phone_custom
+                    pwd = parsed.get("password_2fa", "") if use_2fa else pwd_custom
+                    tag = parsed.get("tag", "") if use_tag else tag_custom
+
+                    if not entry["content"].startswith(b"SQLite format 3"):
+                        lines.append("{0}: not a Telethon session".format(entry["name"]))
+                        continue
+
+                    result = await import_authorized_session(
+                        entry["content"],
+                        phone,
+                        pwd,
+                        tag,
+                        entry_api_id,
+                        entry_api_hash,
+                        entry_platform
+                    )
+                    if result.get("ok"):
+                        ok_count += 1
+                        lines.append(
+                            "{0}: imported {1}".format(
+                                entry["name"], result.get("phone", "")
+                            )
+                        )
+                    else:
+                        lines.append(
+                            "{0}: {1}".format(
+                                entry["name"], result.get("error", "failed")
+                            )
+                        )
+
+                body = "".join(
+                    '<div class="small">{0}</div>'.format(html_escape(item))
+                    for item in lines
+                )
+                title = "Import success" if ok_count else "Import failed"
+                return simple_page(
+                    title,
+                    '{0}<p>{1} imported.</p><div class="actions">'
+                    '<a class="button" href="/admin/accounts">Back</a></div>'.format(
+                        body, ok_count
+                    )
+                )
+
+            future = asyncio.run_coroutine_threadsafe(_import_review(), main_loop)
             try:
-                html = future.result(timeout=60)
+                html = future.result(timeout=max(60, min(300, 45 * len(valid_entries))))
             except Exception as e:
                 html = message_page("Error", "Timeout: {0}".format(str(e)))
+
+            with pending_imports_lock:
+                pending_imports.pop(token, None)
 
             self._send_html(200, html)
             return
