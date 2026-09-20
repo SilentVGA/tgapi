@@ -1487,9 +1487,13 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
-    def _send_html(self, code, html):
+    def _send_html(self, code, html, no_cache=False):
         self.send_response(code)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        if no_cache:
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(html.encode("utf-8"))
 
@@ -1666,7 +1670,7 @@ class Handler(BaseHTTPRequestHandler):
                 .replace("__DOWNLOAD_BUTTON__", download_button)
             )
 
-            self._send_html(200, html)
+            self._send_html(200, html, no_cache=True)
             return
 
         if path.startswith("/downloadsession/"):
