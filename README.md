@@ -178,3 +178,4 @@ ADMIN_PASSWORD = "你的密码"
 Web 服务直接使用 Python 内置 `http.server`，账号数据使用 Telethon SQLite Session + JSON，适合 NAT VPS、低内存 VPS 和轻量服务器。
 
 [查看开源协议](https://github.com/SilentVGA/tgapi/blob/main/LICENSE) · [联系作者](https://t.me/lrlbl)
+
