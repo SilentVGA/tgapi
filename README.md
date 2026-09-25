@@ -5,7 +5,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Memory](https://img.shields.io/badge/Memory-✓128MB-orange?logo=linux)
+![Memory](https://img.shields.io/badge/Memory-✓96MB-orange?logo=linux)
 
 ## ⚡ 部署与使用
 
