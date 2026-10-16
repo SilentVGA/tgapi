@@ -21,6 +21,8 @@ python3 main.py
 > 如果是受限制的 Debian/Ubuntu 系统，请使用：
 > `pip install telethon --break-system-packages`
 
+<b>强烈建议使用 scp 工具传输 main.py 到您的服务器，而非使用 nano 复制粘贴。</b> [详细了解>>>](https://www.bing.com/search?q=%E6%80%8E%E4%B9%88%E4%BD%BF%E7%94%A8%20scp%20%E4%BC%A0%E8%BE%93%E6%96%87%E4%BB%B6&qs=n&form=QBRE&pc=MOZB&sp=-1&lq=0&pq=%E6%80%8E%E4%B9%88%E4%BD%BF%E7%94%A8%20scp%20%E4%BC%A0%E8%BE%93%E6%96%87%E4%BB%B6&sc=12-13&sk=&cvid=2FEA1F5C3B954CFFA527AFB69D431070)
+
 启动后访问：
 
 ```
