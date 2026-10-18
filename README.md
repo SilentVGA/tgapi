@@ -1,4 +1,4 @@
-# tgapi - 极简 Telegram 接码系统
+# tgapi - 极简 Telegram api接码、协议号管理面板
 
 一个单文件、无 Web 框架、专为低内存 NAT 机器设计的 Telegram 验证码接收 Python 脚本。支持导入导出 `.session` + `.json` 账号包、随机设备指纹、真实手机号检测与 2FA 管理。
 
