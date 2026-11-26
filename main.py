@@ -16,20 +16,18 @@ from urllib.parse import parse_qs, urlparse, quote
 from telethon import TelegramClient, events, functions
 from telethon.errors import SessionPasswordNeededError
 
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = "qwert12345"
 SERVER_PORT = 8000
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
-OFFICIAL_CLIENT_API_ID = 2040
-OFFICIAL_CLIENT_API_HASH = "b18441a1ff607e10a989891a5462e627"
-DEFAULT_API_ID = OFFICIAL_CLIENT_API_ID
-DEFAULT_API_HASH = OFFICIAL_CLIENT_API_HASH
+DEFAULT_API_ID = 2040
+DEFAULT_API_HASH = "b18441a1ff607e10a989891a5462e627"
 PLATFORM_API = {
     "android": (6, "eb06d4abfb49dc3eeb1aeb98ae0f581e"),
     "ios": (10840, "33c45224029d59cb3ad0c16576128f81"),
-    "desktop": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
-    "desktop_windows": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
-    "desktop_linux": (OFFICIAL_CLIENT_API_ID, OFFICIAL_CLIENT_API_HASH),
-    "macos": (2834, "6f75bc28c47b6a361b53943a2b70d0c5"),
+    "desktop": (2040, "b18441a1ff607e10a989891a5462e627"),
+    "desktop_windows": (2040, "b18441a1ff607e10a989891a5462e627"),
+    "desktop_linux": (2040, "b18441a1ff607e10a989891a5462e627"),
+    "macos": (2834, "68875f756c9b437a8b916ca3de215815"),
     "nagram": (11535358, "33d372962fadb01df47e6ceed4e33cd6"),
     "nicegram": (94575, "a3406de8d171bb422bb6ddf3bbd800e2"),
     "custom": None
@@ -46,6 +44,17 @@ PLATFORM_OPTIONS = (
     ("custom", "Custom")
 )
 OFFICIAL_PLATFORMS = {"android", "ios", "desktop", "desktop_windows", "desktop_linux", "macos"}
+PLATFORM_DEVICE_MAP = {
+    "android": ["android"],
+    "nagram": ["android"],
+    "ios": ["ios"],
+    "nicegram": ["ios"],
+    "macos": ["macos"],
+    "desktop_windows": ["desktop_windows"],
+    "desktop_linux": ["desktop_linux"],
+    "desktop": ["desktop_windows", "desktop_linux"],
+    "custom": ["random", "desktop_windows", "desktop_linux", "macos", "android", "ios"]
+}
 DEVICE_POOL = {
     "desktop_windows": [
         {"device_model": "Desktop", "system_version": "Windows 10", "app_version": "5.10.1 x64", "lang_pack": "tdesktop", "system_lang_code": "en-US"},
@@ -104,7 +113,6 @@ DEVICE_POOL_OPTIONS = (
     ("macos", "macOS"),
     ("android", "Android"),
     ("ios", "iOS"),
-    ("default", "Panel default"),
 )
 DEFAULT_DEVICE = {
     "device_model": "Desktop",
@@ -114,6 +122,7 @@ DEFAULT_DEVICE = {
     "system_lang_code": "en-US",
 }
 REVOKE_WARNING = "WARNING: this logs out and invalidates only the session stored in this panel for the selected accounts. Sessions on other devices stay active. Local session files will be deleted. This cannot be undone. Continue?"
+KICK_WARNING = "WARNING: this terminates all other active Telegram sessions except the session stored in this panel. Continue?"
 CALLING_CODES = tuple(sorted({
     "1", "7",
     "20", "27", "30", "31", "32", "33", "34", "36", "39",
@@ -146,8 +155,6 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 main_loop = asyncio.new_event_loop()
 clients = {}
 pending_logins = {}
-pending_imports = {}
-pending_imports_lock = threading.Lock()
 client_locks = {}
 file_lock = threading.RLock()
 admin_sessions = set()
@@ -218,36 +225,7 @@ __BODY__
 """)
 ADMIN_TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>__TITLE__ · TGAPI</title><style>__STYLE__</style></head><body class="admin"><div class="dashboard"><aside class="sidebar"><div class="brand">TGAPI<small>SESSION CONTROL PANEL</small></div><div class="nav-label">MANAGEMENT</div><nav class="nav"><a class="nav-item __DASH_ACTIVE__" href="/admin">Dashboard</a><a class="nav-item __ACCOUNTS_ACTIVE__" href="/admin/accounts">Accounts</a><a class="nav-item __ADD_ACTIVE__" href="/admin/add_account">Add Account</a><a class="nav-item __DOWNLOAD_ACTIVE__" href="/admin/session_download_page">Session Download</a><a class="nav-item __PHONE_ACTIVE__" href="/admin/phone_edit">Phone</a><a class="nav-item __TWOFa_ACTIVE__" href="/admin/twofa_edit">2FA</a><a class="nav-item __TAGS_ACTIVE__" href="/admin/tags">Tags</a></nav><div class="sidebar-bottom"><a class="nav-item" href="/admin/logout">Logout</a></div></aside><main class="main">__CONTENT__</main></div>__SCRIPT__</body></html>"""
 LOGIN_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Account Login</div><div class="panel-desc">Choose an API platform, enter a phone number, then verify the Telegram login code.</div></div></div><form method="post" action="/admin/send_code"><div class="row"><div><div class="label">Phone</div><input type="text" name="phone" required></div><div><div class="label">API Platform</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div></div><div class="row custom-api-fields"><div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div><div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div></div><div class="row"><div><div class="label">Device Profile</div><select name="device_pool">__DEVICE_POOL_OPTIONS__</select></div><div><div class="label">Tag</div><input type="text" name="tag" placeholder="optional"></div></div><div class="actions"><button class="primary" type="submit">Send Verification Code</button></div></form></section>"""
-IMPORT_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Session Import</div><div class="panel-desc">Upload a ZIP archive. Each phone-named folder must contain one .session file and one .json file in the standard export format.</div></div></div><form method="post" action="/admin/import_session" enctype="multipart/form-data"><div class="label">ZIP Archive</div><input type="file" name="session_file" accept=".zip" required><div class="label">Tag</div><input type="text" name="tag" placeholder="optional"><div class="actions"><button class="primary" type="submit">Upload and Continue</button></div></form></section>"""
-IMPORT_REVIEW_TEMPLATE = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Import Session Options</div><div class="panel-desc">Review the recognized content parsed from each JSON file. Tag is applied separately to all imported accounts. Accounts whose JSON lacks API credentials fall back to the platform selected below.</div></div></div>
-<form method="post" action="/admin/import_session_review">
-<input type="hidden" name="token" value="__TOKEN__">
-<div class="panel" style="margin:14px 0">
-<div class="label">Recognized content</div>
-__FILES__
-</div>
-<div class="row">
-<div><div class="label">Tag for all imported</div><input type="text" name="tag" value="__TAG_VALUE__" placeholder="Optional"></div>
-<div><div class="label">Device profile fallback</div><select name="device_pool">__DEVICE_POOL_OPTIONS__</select></div>
-</div>
-<div class="row">
-<div><div class="label">API Platform fallback</div><select class="platform-select" name="platform" onchange="updatePlatformInfo(this)">__PLATFORM_OPTIONS__</select><div class="small platform-info"></div></div>
-</div>
-<div class="row custom-api-fields">
-<div><div class="label">API_ID</div><input type="text" name="api_id" value="__API_ID_VALUE__" placeholder="Custom API_ID"></div>
-<div><div class="label">API_HASH</div><input type="text" name="api_hash" value="__API_HASH_VALUE__" placeholder="Custom API_HASH"></div>
-</div>
-<div class="actions"><button class="primary" type="submit">Import Sessions</button><a class="button" href="/admin/add_account">Cancel</a></div>
-</form></section>"""
-IMPORT_REVIEW_SCRIPT = """<script>
-function toggleImportCustom() {
-var form = document.querySelector('form[action="/admin/import_session_review"]');
-if (!form) return;
-var sel = form.querySelector('select.platform-select');
-if (sel) updatePlatformInfo(sel);
-}
-document.addEventListener("DOMContentLoaded", toggleImportCustom);
-</script>"""
+IMPORT_PANEL = """<section class="panel form-panel"><div class="panel-head"><div><div class="panel-title">Session Import</div><div class="panel-desc">Upload a ZIP archive. Each phone-named folder must contain one .session file and one .json file with valid API credentials and device information.</div></div></div><form method="post" action="/admin/import_session" enctype="multipart/form-data"><div class="label">ZIP Archive</div><input type="file" name="session_file" accept=".zip" required><div class="label">Tag</div><input type="text" name="tag" placeholder="optional"><div class="actions"><button class="primary" type="submit">Upload and Import</button></div></form></section>"""
 ADD_ACCOUNT_CONTENT = """<div class="topbar"><div><h1>Add Account</h1><div class="subtitle">Create a local Telethon session or import an existing session folder archive.</div></div><div class="live"><span class="dot"></span> Server online</div></div><div class="admin-grid">__LOGIN_PANEL____IMPORT_PANEL__</div>"""
 COPY_SCRIPT = """<script>
 function copyText(text) {
@@ -265,6 +243,7 @@ document.body.removeChild(ta);
 </script>"""
 ACCOUNTS_SCRIPT = """<script>
 var REVOKE_WARNING = "__REVOKE_WARNING__";
+var KICK_WARNING = "__KICK_WARNING__";
 function pageOrigin() {
 try {
 return window.location.origin || "";
@@ -407,6 +386,9 @@ action = form.getAttribute("action") || "";
 if (action.indexOf("/admin/revoke_selected") >= 0) {
 return confirm(REVOKE_WARNING);
 }
+if (action.indexOf("/admin/kick_selected") >= 0 || action.indexOf("/admin/kick_all") >= 0) {
+return confirm(KICK_WARNING);
+}
 if (action.indexOf("/admin/delete_selected") >= 0) {
 return true;
 }
@@ -426,6 +408,8 @@ return true;
 </script>"""
 PLATFORM_SCRIPT = """<script>
 var PLATFORM_DATA = __PLATFORM_DATA__;
+var PLATFORM_DEVICE_MAP = __PLATFORM_DEVICE_MAP__;
+var DEVICE_LABELS = __DEVICE_LABELS__;
 var OFFICIAL_PLATFORMS = ["android", "ios", "desktop", "desktop_windows", "desktop_linux", "macos"];
 function platformText(value) {
 if (value === "custom") {
@@ -442,6 +426,27 @@ text += " | WARNING: official API IDs are shared by many tools and may get accou
 text += " | Third-party client API.";
 }
 return text;
+}
+function updateDevicePoolOptions(form, platform) {
+var devSel = form.querySelector('select[name="device_pool"]');
+if (!devSel) {
+return;
+}
+var allowed = PLATFORM_DEVICE_MAP[platform] || PLATFORM_DEVICE_MAP["custom"];
+var current = devSel.value;
+devSel.innerHTML = "";
+for (var i = 0; i < allowed.length; i++) {
+var key = allowed[i];
+var opt = document.createElement("option");
+opt.value = key;
+opt.textContent = DEVICE_LABELS[key] || key;
+devSel.appendChild(opt);
+}
+if (allowed.indexOf(current) >= 0) {
+devSel.value = current;
+} else {
+devSel.value = allowed[0];
+}
 }
 function updatePlatformInfo(sel) {
 var form = sel.form;
@@ -466,6 +471,7 @@ if (!custom) {
 fields[i].value = "";
 }
 }
+updateDevicePoolOptions(form, sel.value);
 }
 document.addEventListener("DOMContentLoaded", function() {
 var selects = document.querySelectorAll("select.platform-select");
@@ -582,18 +588,22 @@ def platform_options_html(selected):
     return options
 
 
-def device_pool_options(selected):
+def device_pool_options(selected, platform="custom"):
+    allowed = PLATFORM_DEVICE_MAP.get(platform, PLATFORM_DEVICE_MAP["custom"])
     options = ""
     for value, label in DEVICE_POOL_OPTIONS:
+        if value not in allowed:
+            continue
         selected_attr = " selected" if value == selected else ""
         options += f'<option value="{value}"{selected_attr}>{label}</option>'
     return options
 
 
-def pick_device(pool_key):
-    key = str(pool_key or "random").strip().lower()
-    if key == "default":
-        return dict(DEFAULT_DEVICE)
+def pick_device(pool_key, platform="custom"):
+    allowed = PLATFORM_DEVICE_MAP.get(platform, PLATFORM_DEVICE_MAP["custom"])
+    key = str(pool_key or "").strip().lower()
+    if key not in allowed:
+        key = allowed[0]
     if key in DEVICE_POOL:
         return dict(random.choice(DEVICE_POOL[key]))
     all_profiles = []
@@ -613,6 +623,13 @@ def normalize_device(raw):
     if not device:
         return None
     return device
+
+
+def resolve_platform_by_api_id(api_id):
+    for key, val in PLATFORM_API.items():
+        if val is not None and val[0] == api_id:
+            return key
+    return "custom"
 
 
 def parse_credentials_with_platform(platform_raw, api_id_raw, api_hash_raw):
@@ -1257,19 +1274,23 @@ def parse_import_json(raw):
         api_id = int(data.get("api_id") or data.get("app_id") or 0)
     except Exception:
         api_id = 0
-    api_hash = str(data.get("api_hash") or data.get("app_hash") or "")
+    api_hash = str(data.get("api_hash") or data.get("app_hash") or "").strip()
+    if not api_id or not api_hash:
+        return None
     twofa = str(data.get("twofa") or data.get("password") or "")
     device = normalize_device({
-        "device_model": data.get("device_model"),
+        "device_model": data.get("device_model") or data.get("device"),
         "system_version": data.get("system_version") or data.get("sdk"),
         "app_version": data.get("app_version"),
         "lang_pack": data.get("lang_pack"),
-        "system_lang_code": data.get("system_lang_code"),
+        "system_lang_code": data.get("system_lang_code") or data.get("lang_code"),
     })
+    if not device:
+        return None
     return {
         "phone": digits,
         "password_2fa": twofa,
-        "api_id": api_id or None,
+        "api_id": api_id,
         "api_hash": api_hash,
         "device": device
     }
@@ -1315,7 +1336,7 @@ def build_import_entries(upload_name, file_content):
             continue
         parsed = parse_import_json(group["json"])
         if parsed is None:
-            entries.append({"name": label, "content": group["session"], "parsed": None, "error": "invalid .json content"})
+            entries.append({"name": label, "content": group["session"], "parsed": None, "error": "invalid .json content (missing phone, api_id, api_hash, or device info)"})
             continue
         if not group["session"].startswith(b"SQLite format 3"):
             entries.append({"name": label, "content": group["session"], "parsed": None, "error": "not a Telethon session"})
@@ -1324,41 +1345,6 @@ def build_import_entries(upload_name, file_content):
     if not entries:
         return None, "No .session and .json pairs found in the archive."
     return entries, None
-
-
-def import_review_file_list(entries):
-    rows = []
-    for entry in entries:
-        name = str(entry.get("name", ""))
-        parsed = entry.get("parsed")
-        if not parsed:
-            rows.append('<div class="small"><strong>{0}</strong> - {1}</div>'.format(
-                html_escape(name),
-                html_escape(entry.get("error", "invalid entry"))
-            ))
-            continue
-        device = parsed.get("device") or {}
-        rows.append(
-            '<div class="small"><strong>{0}</strong> - Phone: {1} | 2FA: {2} | API_ID: {3} | Device: {4} | App: {5}</div>'.format(
-                html_escape(name),
-                html_escape("+" + parsed.get("phone", "")),
-                html_escape(parsed.get("password_2fa", "") or "(empty)"),
-                html_escape(str(parsed.get("api_id") or "(fallback)")),
-                html_escape(device.get("device_model", "(fallback)")),
-                html_escape(device.get("app_version", "(fallback)"))
-            )
-        )
-    return "".join(rows) or '<div class="small">No entries.</div>'
-
-
-def build_import_review_page(token, entries, settings, tag_default=""):
-    content = IMPORT_REVIEW_TEMPLATE
-    content = content.replace("__TOKEN__", html_escape(token, quote=True))
-    content = content.replace("__FILES__", import_review_file_list(entries))
-    content = content.replace("__TAG_VALUE__", html_escape(tag_default, quote=True))
-    content = content.replace("__DEVICE_POOL_OPTIONS__", device_pool_options("random"))
-    content = fill_platform_content(content, settings)
-    return content
 
 
 async def import_authorized_session(file_content, phone_input, pwd_input, tag_input, api_id, api_hash, platform, device):
@@ -1478,18 +1464,31 @@ def posted_account_ids(data):
 
 def admin_scripts(extra=""):
     platform_data = {key: (None if value is None else [value[0], value[1]]) for key, value in PLATFORM_API.items()}
-    scripts = COPY_SCRIPT + PLATFORM_SCRIPT.replace("__PLATFORM_DATA__", json.dumps(platform_data))
-    scripts += ACCOUNTS_SCRIPT.replace("__REVOKE_WARNING__", REVOKE_WARNING.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " "))
+    device_labels = {key: label for key, label in DEVICE_POOL_OPTIONS}
+    scripts = COPY_SCRIPT + (
+        PLATFORM_SCRIPT
+        .replace("__PLATFORM_DATA__", json.dumps(platform_data))
+        .replace("__PLATFORM_DEVICE_MAP__", json.dumps(PLATFORM_DEVICE_MAP))
+        .replace("__DEVICE_LABELS__", json.dumps(device_labels))
+    )
+    scripts += (
+        ACCOUNTS_SCRIPT
+        .replace("__REVOKE_WARNING__", REVOKE_WARNING.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " "))
+        .replace("__KICK_WARNING__", KICK_WARNING.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " "))
+    )
     return scripts + extra
 
 
 def fill_platform_content(content, settings):
-    platform_options = platform_options_html(settings.get("platform", "desktop"))
-    safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True) if settings.get("platform") == "custom" else ""
-    safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True) if settings.get("platform") == "custom" else ""
+    selected_platform = settings.get("platform", "desktop")
+    platform_options = platform_options_html(selected_platform)
+    safe_api_id = html_escape(str(settings.get("api_id", "")), quote=True) if selected_platform == "custom" else ""
+    safe_api_hash = html_escape(str(settings.get("api_hash", "")), quote=True) if selected_platform == "custom" else ""
+    allowed_devices = PLATFORM_DEVICE_MAP.get(selected_platform, PLATFORM_DEVICE_MAP["custom"])
+    default_dev = allowed_devices[0] if allowed_devices else "random"
     return (
         content
-        .replace("__DEVICE_POOL_OPTIONS__", device_pool_options("random"))
+        .replace("__DEVICE_POOL_OPTIONS__", device_pool_options(default_dev, selected_platform))
         .replace("__PLATFORM_OPTIONS__", platform_options)
         .replace("__API_ID_VALUE__", safe_api_id)
         .replace("__API_HASH_VALUE__", safe_api_hash)
@@ -1751,7 +1750,6 @@ class Handler(BaseHTTPRequestHandler):
             "/admin",
             "/admin/login_new_account",
             "/admin/import_session_page",
-            "/admin/import_session_review",
             "/admin/accounts",
             "/admin/add_account",
             "/admin/session_download_page",
@@ -1767,28 +1765,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             settings = load_settings()
             scripts = admin_scripts()
-            if path == "/admin/import_session_review":
-                query = parse_qs(urlparse(self.path).query)
-                token = str(get_first(query, "token", "") or "").strip()
-                with pending_imports_lock:
-                    pending = pending_imports.get(token)
-                if not pending or time.time() - pending.get("created_at", 0) > 900:
-                    if token:
-                        with pending_imports_lock:
-                            pending_imports.pop(token, None)
-                    self._send_html(200, message_page("Error", "Upload expired. Please upload the file again."))
-                    return
-                entries = pending.get("entries", [])
-                valid_count = sum(1 for item in entries if item.get("parsed"))
-                if not valid_count:
-                    self._send_html(200, message_page("Error", "No valid session folders were found in the upload."))
-                    return
-                content = build_import_review_page(token, entries, settings, str(pending.get("tag", "") or ""))
-                self._send_html(
-                    200,
-                    admin_page("Import Session Options", content, admin_scripts() + IMPORT_REVIEW_SCRIPT, "add")
-                )
-                return
             if path == "/admin/add_account":
                 content = fill_platform_content(
                     ADD_ACCOUNT_CONTENT.replace("__LOGIN_PANEL__", LOGIN_PANEL).replace("__IMPORT_PANEL__", IMPORT_PANEL),
@@ -1855,6 +1831,8 @@ class Handler(BaseHTTPRequestHandler):
                         '<div class="item-phone">{2}</div></div><div class="item-actions">'
                         '<button type="button" data-copy="{1}" onclick="copyText(applyPageOrigin(this.dataset.copy))">Copy</button>'
                         '<a class="button" href="/getcode/{0}">Open</a>'
+                        '<form class="inline-form" method="post" action="/admin/kick/{0}" onsubmit="return confirm(KICK_WARNING);">'
+                        '<button type="submit" class="danger">Kick</button></form>'
                         '<form class="inline-form" method="post" action="/admin/revoke/{0}" onsubmit="return confirm(REVOKE_WARNING);">'
                         '<button type="submit" class="danger">Revoke</button></form>'
                         '<form class="inline-form" method="post" action="/admin/delete/{0}" onsubmit="return confirm(\'Delete this account and its local session files?\');">'
@@ -1863,7 +1841,7 @@ class Handler(BaseHTTPRequestHandler):
                 account_body = items or '<div class="panel"><div class="small">No accounts yet.</div></div>'
                 content = (
                     '<div class="topbar"><div><h1>Accounts</h1>'
-                    '<div class="subtitle">Copy keys, open receive-code pages, revoke the panel session, delete sessions, or export selected accounts.</div></div>'
+                    '<div class="subtitle">Copy keys, open receive-code pages, kick other sessions, revoke the panel session, delete sessions, or export selected accounts.</div></div>'
                     '<div class="live"><span class="dot"></span> Server online</div></div>'
                     '<div class="code-filters">{0}</div>'
                     '<form id="bulk-form" method="post" action="/admin/download_keys">'
@@ -1877,6 +1855,8 @@ class Handler(BaseHTTPRequestHandler):
                     '<div class="actions"><button type="button" onclick="copySelectedKeys()">Copy keys</button>'
                     '<button type="submit" formaction="/admin/download_keys">Download keys</button>'
                     '<button type="submit" formaction="/admin/download_sessions_zip">Download sessions</button>'
+                    '<button type="submit" class="danger" formaction="/admin/kick_selected">Kick</button>'
+                    '<button type="submit" class="danger" formaction="/admin/kick_all">Kick All</button>'
                     '<button type="submit" class="danger" formaction="/admin/revoke_selected">Revoke</button>'
                     '<button type="submit" class="danger" formaction="/admin/delete_selected" onclick="return confirm(\'Delete selected accounts and their local session files?\')">Delete</button></div></div>'
                     '<div class="accounts-toolbar"><div class="tag-form"><input type="text" name="tag" placeholder="Bulk tag for selected">'
@@ -2070,8 +2050,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_html(200, message_page("Error", "Missing phone."))
                 return
             tag = get_first(data, "tag", "").strip()
-            device_pool = get_first(data, "device_pool", "random")
-            device = pick_device(device_pool)
             platform_raw = get_first(data, "platform", "")
             api_id_raw = get_first(data, "api_id", "")
             api_hash_raw = get_first(data, "api_hash", "")
@@ -2083,6 +2061,8 @@ class Handler(BaseHTTPRequestHandler):
             if error:
                 self._send_html(200, message_page("Error", error))
                 return
+            device_pool = get_first(data, "device_pool", "random")
+            device = pick_device(device_pool, platform)
             remember_credentials(platform, api_id_raw, api_hash_raw)
 
             async def _send_code():
@@ -2269,70 +2249,24 @@ class Handler(BaseHTTPRequestHandler):
             if error:
                 self._send_html(200, message_page("Error", error))
                 return
-            token = secrets.token_urlsafe(24)
-            with pending_imports_lock:
-                pending_imports[token] = {
-                    "created_at": time.time(),
-                    "entries": entries,
-                    "tag": tag_upload
-                }
-            settings = load_settings()
-            content = build_import_review_page(token, entries, settings, tag_upload)
-            self._send_html(
-                200,
-                admin_page("Import Session Options", content, admin_scripts() + IMPORT_REVIEW_SCRIPT, "add")
-            )
-            return
-        if path == "/admin/import_session_review":
-            token = get_first(data, "token", "").strip()
-            with pending_imports_lock:
-                pending = pending_imports.get(token)
-            if not pending or time.time() - pending.get("created_at", 0) > 900:
-                with pending_imports_lock:
-                    pending_imports.pop(token, None)
-                self._send_html(200, message_page("Error", "Upload expired. Please upload the file again."))
-                return
-            entries = pending.get("entries", [])
-            valid_entries = [item for item in entries if item.get("parsed")]
-            if not valid_entries:
-                with pending_imports_lock:
-                    pending_imports.pop(token, None)
-                self._send_html(200, message_page("Error", "No valid session folders were found."))
-                return
-            tag_custom = get_first(data, "tag", "").strip()
-            device_pool = get_first(data, "device_pool", "random")
-            platform_raw = get_first(data, "platform", "")
-            api_id_raw = get_first(data, "api_id", "")
-            api_hash_raw = get_first(data, "api_hash", "")
-            fallback_api_id, fallback_api_hash, fallback_platform, api_error = parse_credentials_with_platform(
-                platform_raw,
-                api_id_raw,
-                api_hash_raw
-            )
-            if api_error:
-                self._send_html(200, message_page("Error", api_error))
-                return
-            remember_credentials(fallback_platform, api_id_raw, api_hash_raw)
 
-            async def _import_review():
+            async def _import_direct():
                 lines = []
                 ok_count = 0
-                for entry in valid_entries:
-                    parsed = entry["parsed"]
-                    if parsed.get("api_id") and parsed.get("api_hash"):
-                        entry_api_id = parsed["api_id"]
-                        entry_api_hash = str(parsed["api_hash"])
-                        entry_platform = "custom"
-                    else:
-                        entry_api_id = fallback_api_id
-                        entry_api_hash = fallback_api_hash
-                        entry_platform = fallback_platform
-                    device = parsed.get("device") or pick_device(device_pool)
+                for entry in entries:
+                    parsed = entry.get("parsed")
+                    if not parsed:
+                        lines.append("{0}: {1}".format(entry["name"], entry.get("error", "invalid entry")))
+                        continue
+                    entry_api_id = parsed["api_id"]
+                    entry_api_hash = str(parsed["api_hash"])
+                    entry_platform = resolve_platform_by_api_id(entry_api_id)
+                    device = parsed["device"]
                     result = await import_authorized_session(
                         entry["content"],
                         parsed.get("phone", ""),
                         parsed.get("password_2fa", ""),
-                        tag_custom,
+                        tag_upload,
                         entry_api_id,
                         entry_api_hash,
                         entry_platform,
@@ -2356,13 +2290,11 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 )
 
-            future = asyncio.run_coroutine_threadsafe(_import_review(), main_loop)
+            future = asyncio.run_coroutine_threadsafe(_import_direct(), main_loop)
             try:
-                html = future.result(timeout=max(60, min(300, 45 * len(valid_entries))))
+                html = future.result(timeout=max(60, min(300, 45 * len(entries))))
             except Exception as e:
                 html = message_page("Error", "Timeout: {0}".format(str(e)))
-            with pending_imports_lock:
-                pending_imports.pop(token, None)
             self._send_html(200, html)
             return
         if path == "/admin/save_session_download":
@@ -2535,6 +2467,75 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_html(200, message_page("Error", "No session files to download."))
                 return
             self._send_file(data_zip, "application/zip", "sessions.zip")
+            return
+        if path in ("/admin/kick_selected", "/admin/kick_all"):
+            if path == "/admin/kick_all":
+                account_ids = [
+                    str(m.get("id", ""))
+                    for m in list_accounts()
+                    if is_safe_account_id(str(m.get("id", "")))
+                ]
+            else:
+                account_ids = posted_account_ids(data)
+            if not account_ids:
+                self._send_html(200, message_page("Error", "No accounts selected."))
+                return
+
+            async def _kick_many():
+                lines = []
+                for account_id in account_ids:
+                    meta = load_meta(account_id)
+                    client = await ensure_client(account_id)
+                    if client is None:
+                        lines.append("{0}: session offline".format(display_phone(meta or {})))
+                        continue
+                    try:
+                        await client(functions.auth.ResetAuthorizationsRequest())
+                        lines.append("{0}: other sessions kicked".format(display_phone(meta or {})))
+                    except Exception as e:
+                        lines.append("{0}: failed {1}".format(display_phone(meta or {}), str(e)))
+                body = "".join('<div class="small">{0}</div>'.format(html_escape(item)) for item in lines)
+                return simple_page(
+                    "Kick result",
+                    '{0}<div class="actions"><a class="button" href="/admin/accounts">Back</a></div>'.format(body)
+                )
+
+            future = asyncio.run_coroutine_threadsafe(_kick_many(), main_loop)
+            try:
+                html = future.result(timeout=max(60, 30 * len(account_ids)))
+            except Exception as e:
+                html = message_page("Error", "Timeout: {0}".format(str(e)))
+            self._send_html(200, html)
+            return
+        if path.startswith("/admin/kick/"):
+            account_id = path.split("/admin/kick/", 1)[-1].strip("/")
+            if not is_safe_account_id(account_id):
+                self._redirect("/admin/accounts")
+                return
+
+            async def _kick_one():
+                meta = load_meta(account_id)
+                client = await ensure_client(account_id)
+                if client is None:
+                    return message_page("Kick", "Session offline.")
+                try:
+                    await client(functions.auth.ResetAuthorizationsRequest())
+                    message = "All other sessions kicked for {0}.".format(display_phone(meta or {}))
+                except Exception as e:
+                    message = "Kick failed: {0}".format(str(e))
+                return simple_page(
+                    "Kick",
+                    '<p>{0}</p><div class="actions"><a class="button" href="/admin/accounts">Back</a></div>'.format(
+                        html_escape(message)
+                    )
+                )
+
+            future = asyncio.run_coroutine_threadsafe(_kick_one(), main_loop)
+            try:
+                html = future.result(timeout=60)
+            except Exception as e:
+                html = message_page("Error", "Timeout: {0}".format(str(e)))
+            self._send_html(200, html)
             return
         if path == "/admin/revoke_selected":
             account_ids = posted_account_ids(data)
